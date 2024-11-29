@@ -305,16 +305,19 @@ static gboolean gtk_tree_model_find_string(GtkTreeModel *model,
 
 static void update_time_widget(GritsViewer *viewer, time_t time, AWeatherGui *self)
 {
-	g_debug("AWeatherGui: update_time_widget - time=%u", (guint)time);
-	// FIXME
-	//GtkTreeView  *tview = GTK_TREE_VIEW(aweather_gui_get_widget(self, "main_time"));
-	//GtkTreeModel *model = GTK_TREE_MODEL(gtk_tree_view_get_model(tview));
-	//GtkTreeIter iter;
-	//if (gtk_tree_model_find_string(model, &iter, NULL, 0, time)) {
-	//	GtkTreePath *path = gtk_tree_model_get_path(model, &iter);
-	//	gtk_tree_view_set_cursor(tview, path, NULL, FALSE);
-	//	gtk_tree_path_free(path);
-	//}
+	g_debug("AWeatherGui: update_time_widget - time=%ld", (long)time);
+	GtkTreeView  *tview = GTK_TREE_VIEW(aweather_gui_get_widget(self, "main_time"));
+	GtkTreeModel *model = GTK_TREE_MODEL(gtk_tree_view_get_model(tview));
+	GtkTreeIter iter;
+	struct tm* tm = gmtime(&time);
+	gchar* cTimeString = g_strdup_printf("%02i:%02iZ", tm->tm_hour, tm->tm_min);
+	g_debug("AweatherGui: update_time_widget - cTimeString: %s, time: %ld", cTimeString, (long)time);
+	if (gtk_tree_model_find_string(model, &iter, NULL, 0, cTimeString)) {
+		GtkTreePath *path = gtk_tree_model_get_path(model, &iter);
+		gtk_tree_view_set_cursor(tview, path, NULL, FALSE);
+		gtk_tree_path_free(path);
+	}
+	g_free(cTimeString);
 }
 
 G_MODULE_EXPORT gboolean on_configure(AWeatherGui *self, GdkEventConfigure *config)
@@ -473,7 +476,7 @@ static void time_setup(AWeatherGui *self)
 		gtk_tree_store_append(store, &hour_iter, NULL);
 		gtk_tree_store_set(store, &hour_iter, 0, str, 1, hour, 2, 0, -1);
 		g_free(str);
-		for (int min = 5; min < 60; min += 5) {
+		for (int min = 1; min < 60; min += 1) {
 			GtkTreeIter min_iter;
 			gchar *str = g_strdup_printf("%02d:%02dZ", hour, min);
 			gtk_tree_store_append(store, &min_iter, &hour_iter);
@@ -481,6 +484,13 @@ static void time_setup(AWeatherGui *self)
 			g_free(str);
 		}
 	}
+	
+	/* Default to the closest hour, rounding down if we are in the middle of an hour. */
+	time_t gritsTime = grits_viewer_get_time(self->viewer);
+	gritsTime -= gritsTime % (60 * 60);
+	grits_viewer_set_time(self->viewer, gritsTime);
+	/* Display the current time the system is set to on startup */
+	update_time_widget(NULL, grits_viewer_get_time(self->viewer), self);
 
 	/* Connect signals */
 	GtkWidget *cal  = aweather_gui_get_widget(self, "main_date_cal");

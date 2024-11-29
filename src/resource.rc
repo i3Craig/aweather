@@ -16,12 +16,12 @@ VS_VERSION_INFO VERSIONINFO
       BEGIN
         VALUE "CompanyName",      "Andy Spencer"
         VALUE "FileDescription",  "AWeather"
-        VALUE "FileVersion",      "0.8.1"
+        VALUE "FileVersion",      "0.9.0"
         VALUE "InternalName",     "aweather"
         VALUE "LegalCopyright",   "Copyright (C) 2008-2011 Andy Spencer"
         VALUE "OriginalFilename", "@ORIGINAL_FILENAME@"
         VALUE "ProductName",      "AWeather"
-        VALUE "ProductVersion",   "0.8.1"
+        VALUE "ProductVersion",   "0.9.0"
       END
     END
     BLOCK "VarFileInfo"

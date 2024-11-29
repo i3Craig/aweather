@@ -1,6 +1,6 @@
 # Init and options
-AC_INIT([aweather], [0.8.1], [andy753421@gmail.com])
-AM_INIT_AUTOMAKE([-Wall -Werror -Wno-portability foreign])
+AC_INIT([aweather],[0.9.0],[andy753421@gmail.com])
+AM_INIT_AUTOMAKE([-Wall -Werror -Wno-portability foreign subdir-objects])
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_MACRO_DIR([m4])
 #AM_SILENT_RULES([yes])
@@ -8,7 +8,7 @@ AC_CONFIG_MACRO_DIR([m4])
 # Check for required programs
 AC_PROG_CC
 LT_PROG_RC
-AC_PROG_LIBTOOL
+LT_INIT
 DOLT
 PKG_PROG_PKG_CONFIG
 

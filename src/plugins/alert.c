@@ -53,7 +53,7 @@ typedef struct {
 typedef struct {
 	/* Basic info (from alert index) */
 	char *title;   // Winter Weather Advisory issued December 19 at 8:51PM
-	char *link;    // http://www.weather.gov/alerts-beta/wwacapget.php?x=AK20101219205100AFGWinterWeatherAdvisoryAFG20101220030000AK
+	char *link;    // https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.1da9cf3fe62fc1b44c0b5581ef3d398a70745811.001.1.cap
 	char *summary; // ...WINTER WEATHER ADVISORY REMAINS IN EFFECT UNTIL 6
 	struct {
 		time_t     effective; // 2010-12-19T20:51:00-09:00
@@ -118,6 +118,15 @@ void msg_parse_index_start(GMarkupParseContext *context, const gchar *name,
 	ParseData *data = user_data;
 	if (g_str_equal(name, "entry"))
 		data->msg  = g_new0(AlertMsg, 1);
+
+	/* If we already found an 'entry' tag (we should have if we found an 'href' tag) and we now are at an 'href' tag, then extract the link property. */
+	if(data->msg && g_str_equal(name, "link")){
+		for(int i = 0; keys[i]; ++i){
+			if(g_str_equal(keys[i], "href")){
+				data->msg->link = g_strdup(vals[i]);
+			}
+		}
+	}
 }
 void msg_parse_index_end(GMarkupParseContext *context, const gchar *name,
 		gpointer user_data, GError **error)
@@ -135,7 +144,7 @@ void msg_parse_index_end(GMarkupParseContext *context, const gchar *name,
 
 	if (!text || !msg) return;
 	else if (g_str_equal(name, "title"))         msg->title         = g_strdup(text);
-	else if (g_str_equal(name, "id"))            msg->link          = g_strdup(text); // hack
+	//else if (g_str_equal(name, "id"))            msg->link          = g_strdup(text); // This is now pulled from the 'link' tag.
 	else if (g_str_equal(name, "summary"))       msg->summary       = g_strdup(text);
 	else if (g_str_equal(name, "cap:effective")) msg->cap.effective = msg_parse_time(text);
 	else if (g_str_equal(name, "cap:expires"))   msg->cap.expires   = msg_parse_time(text);
@@ -155,7 +164,8 @@ void msg_parse_index_end(GMarkupParseContext *context, const gchar *name,
 	}
 
 	if (g_str_equal(name, "value") && data->value_name) {
-		if (g_str_equal(data->value_name, "FIPS6")) msg->cap.fips6 = g_strdup(text);
+		/* FIPS6 appears to have been renamed to SAME in the API. We now search for "SAME" instead of "FIPS6", but the struct field name remains. */
+		if (g_str_equal(data->value_name, "SAME")) msg->cap.fips6 = g_strdup(text);
 		if (g_str_equal(data->value_name, "VTEC"))  msg->cap.vtec  = msg_parse_vtec(text);
 	}
 }
@@ -325,16 +335,18 @@ gboolean msg_load_cap(GritsHttp *http, AlertMsg *msg)
 {
 	if (msg->description || msg->instruction || msg->polygon)
 		return TRUE;
-	g_debug("GritsPlguinAlert: update_cap");
+	g_debug("GritsPlguinAlert: update_cap. msg->link: '%s'.", msg->link);
 
 	/* Download */
-	gchar *id = strrchr(msg->link, '=');
-	if (!id) return FALSE; id++;
+	//gchar *id = strrchr(msg->link, '=');
+	gchar *cFileName = g_path_get_basename(msg->link);
+	//if (!id) return FALSE; id++;
 	gchar *dir  = g_strdelimit(g_strdup(msg->info->abbr), " ", '_');
-	gchar *tmp  = g_strdup_printf("%s/%s.xml", dir, id);
+	gchar *tmp  = g_strdup_printf("%s/%s.xml", dir, cFileName);
 	gchar *file = grits_http_fetch(http, msg->link, tmp, GRITS_ONCE, NULL, NULL);
 	g_free(tmp);
 	g_free(dir);
+	g_free(cFileName);
 	if (!file)
 		return FALSE;
 
@@ -400,7 +412,7 @@ gboolean fips_group_state(gpointer key, gpointer value, gpointer data)
 	GList  *counties = value;
 	GList **states   = data;
 	GritsPoly *poly  = fips_combine(counties);
-	GRITS_OBJECT(poly)->lod = EARTH_R/10;
+	GRITS_OBJECT(poly)->lod = EARTH_R/2;
 	*states = g_list_prepend(*states, poly);
 	g_list_free(counties);
 	return FALSE;
@@ -599,6 +611,10 @@ static GritsPoly *_load_county_based(GritsPluginAlert *alert, AlertMsg *msg)
 	/* Locate counties in the path of the storm */
 	gchar **fipses  = g_strsplit(msg->cap.fips6, " ", -1);
 	GList *counties = NULL;
+	if(fipses == NULL){
+		g_debug("alert.c:_load_county_based failed. Unable to parse FIPS6 codes for alert message '%s'.", msg->title);
+		return NULL;
+	}
 	for (int i = 0; fipses[i]; i++) {
 		glong fips = g_ascii_strtoll(fipses[i], NULL, 10);
 		GritsPoly *county = g_tree_lookup(alert->counties, (gpointer)fips);

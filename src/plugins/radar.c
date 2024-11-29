@@ -49,8 +49,10 @@ static gchar *_find_nearest(time_t time, GList *files,
 	char   *nearest_file = NULL;
 
 	struct tm tm = {};
+	g_debug("Before for loop");
 	for (GList *cur = files; cur; cur = cur->next) {
 		gchar *file = cur->data;
+	        g_debug("RadarSite: find_nearest - in loop. Current file: %s", file);
 		sscanf(file+offset, "%4d%2d%2d_%2d%2d",
 				&tm.tm_year, &tm.tm_mon, &tm.tm_mday,
 				&tm.tm_hour, &tm.tm_min);
@@ -156,7 +158,7 @@ gpointer _site_update_thread(gpointer _site)
 	gchar *dir_list = g_strconcat(nexrad_url, "/", site->city->code,
 			"/", "dir.list", NULL);
 	GList *files = grits_http_available(site->http,
-			"^\\w{4}_\\d{8}_\\d{4}$", site->city->code,
+			"^\\w{4}_\\d{8}_\\d{6}.bz2$", site->city->code,
 			"\\d+ (.*)", (offline ? NULL : dir_list));
 	g_free(dir_list);
 	gchar *nearest = _find_nearest(site->time, files, 5);
@@ -362,11 +364,15 @@ void radar_site_free(RadarSite *site)
 /**************
  * RadarConus *
  **************/
-#define CONUS_NORTH       50.406626367301044
-#define CONUS_WEST       -127.620375523875420
-#define CONUS_WIDTH       3400.0
-#define CONUS_HEIGHT      1600.0
-#define CONUS_DEG_PER_PX  0.017971305190311
+#define CONUS_NORTH       53.0
+#define CONUS_WEST       -132.5
+#define CONUS_WIDTH       4000.0
+/* Note - this image is 2500 px tall, but OpenGL won't display the texture if it is > 2000 px tall */
+#define CONUS_HEIGHT      2500.0
+#define CONUS_DEG_PER_PX_VERTICAL  0.0128
+#define CONUS_DEG_PER_PX_HORIZONTAL  0.0166
+
+#define CONUS_TEXTURE_BUFFER_LENGTH 3000
 
 struct _RadarConus {
 	GritsViewer *viewer;
@@ -403,25 +409,91 @@ static void _conus_update_end_copy(GritsTile *tile, guchar *pixels)
 	if (!tile->tex)
 		glGenTextures(1, &tile->tex);
 
-	gchar *clear = g_malloc0(2048*2048*4);
+	gchar *clear = g_malloc0(CONUS_TEXTURE_BUFFER_LENGTH*CONUS_TEXTURE_BUFFER_LENGTH*4);
 	glBindTexture(GL_TEXTURE_2D, tile->tex);
 
 	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 	glPixelStorei(GL_PACK_ALIGNMENT, 1);
-	glTexImage2D(GL_TEXTURE_2D, 0, 4, 2048, 2048, 0,
+	glTexImage2D(GL_TEXTURE_2D, 0, 4, CONUS_TEXTURE_BUFFER_LENGTH, CONUS_TEXTURE_BUFFER_LENGTH, 0,
 			GL_RGBA, GL_UNSIGNED_BYTE, clear);
 	glTexSubImage2D(GL_TEXTURE_2D, 0, 1,1, CONUS_WIDTH/2,CONUS_HEIGHT,
 			GL_RGBA, GL_UNSIGNED_BYTE, pixels);
 	tile->coords.n = 1.0/(CONUS_WIDTH/2);
 	tile->coords.w = 1.0/ CONUS_HEIGHT;
-	tile->coords.s = tile->coords.n +  CONUS_HEIGHT   / 2048.0;
-	tile->coords.e = tile->coords.w + (CONUS_WIDTH/2) / 2048.0;
+	tile->coords.s = tile->coords.n +  CONUS_HEIGHT   / CONUS_TEXTURE_BUFFER_LENGTH;
+	tile->coords.e = tile->coords.w + (CONUS_WIDTH/2) / CONUS_TEXTURE_BUFFER_LENGTH;
 	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 	glFlush();
 	g_free(clear);
+}
+
+/* Pixel structure - packed so we can represent the 3-byte pixel */
+typedef struct __attribute__((__packed__)) {
+	unsigned char iRed;
+	unsigned char iGreen;
+	unsigned char iBlue;
+} sPixel;
+
+static sPixel* _getPixelAt(guchar *pixels, gint width, gint height, gint pxsize, int x, int y){
+  if(y >= height){
+	  y = height - 1;
+  } else if(y < 0){
+	  y = 0;
+  }
+
+  if(x >= width){
+	  x = width - 1;
+  } else if (x < 0){
+	  x = 0;
+  }
+
+  return  (sPixel*) (pixels + ((y * width + x) * pxsize));
+}
+
+/* Pass in a pixel. Returns true if the pixel is part of a map border / road that should be removed. */
+static int _isBorderPixel(sPixel* ipsPixel){
+  return (ipsPixel->iRed == 0xff && ipsPixel->iGreen == 0xff && ipsPixel->iBlue == 0xff) /* state / country boarders */
+	  || (ipsPixel->iRed == 0x6e && ipsPixel->iGreen == 0x6e && ipsPixel->iBlue == 0x6e) /* county borders */
+	  || (ipsPixel->iRed == 0x8b && ipsPixel->iGreen == 0x47 && ipsPixel->iBlue == 0x26); /* interstates */
+}
+
+/* Locates the nearest non-boarder pixel in the map and returns it */
+static sPixel* _getNearestNonBoarderPixel(guchar *pixels, gint width, gint height, gint pxsize, int ipiStartingX, int ipiStartingY){
+  for(int iCurrentSearchBoxRadius = 0; iCurrentSearchBoxRadius < 10; ++iCurrentSearchBoxRadius){
+    for(int x = ipiStartingX - iCurrentSearchBoxRadius; x <= ipiStartingX + iCurrentSearchBoxRadius; ++x){
+      for(int y = ipiStartingY - iCurrentSearchBoxRadius; y <= ipiStartingY + iCurrentSearchBoxRadius; ++y){
+        sPixel* sCurrentPixel = _getPixelAt(pixels, width, height, pxsize, x, y);
+        if(!_isBorderPixel(sCurrentPixel)){
+          return sCurrentPixel;
+        }
+      }
+    }
+  }
+  
+  /* If nothing was found, then give up and return the starting pixel */
+  return _getPixelAt(pixels, width, height, pxsize, ipiStartingX, ipiStartingY);
+}
+
+static void _unprojectPoint(int ipiX, int ipiY, int* opiX, int* opiY){
+  /* ChatGPT generated polynomial function to map the points below, which were derived by finding common points on the source
+   * image (radar image) and destination image (Open Street Maps screenshot of CONUS).
+   * See deriving-conus-projection.py for details.
+   */
+  
+  /* Scale the points as the screenshot of OSM was not the same size as the CONUS radar image */
+  double x = ipiX * 3 / 8; //ipiX * 1594 / 4000;
+  double y = ipiY * 3 / 8; //ipiY * 911 / 2400;
+  
+  
+  /* Formulas in bc format:
+   * X:  -9.04063882*10^-01*y + -1.75317891*10^-04*y*y + -9.76238636*10^-08*y*y*y +  2.29786240*10^00*x + 1.17856633*10^-03*x*y + 4.20186006*10^-07*x*y*y + 2.55777372*10^-04*x*x + -2.91386724*10^-08*x*x*y + -1.13510117*10^-07*x*x*x + 2.65699057*10^01
+   * Y: 2.25170021*10^00*y +  6.61600795*10^-04*y*y +  8.72044698*10^-08*y*y*y + 8.60491270*10^-01*x + 5.80511426*10^-04*x*y + -4.39101569*10^-08*x*y*y + -5.89743092*10^-04*x*x + -3.74718041*10^-07*x*x*y + 6.42016503*10^-10*x*x*x + -2.84533069*10^02
+   */
+  *opiX = -9.04063882e-01*y + -1.75317891e-04*y*y + -9.76238636e-08*y*y*y +  2.29786240e+00*x + 1.17856633e-03*x*y + 4.20186006e-07*x*y*y + 2.55777372e-04*x*x + -2.91386724e-08*x*x*y + -1.13510117e-07*x*x*x + 2.65699057e+01;
+  *opiY = 2.25170021e+00*y +  6.61600795e-04*y*y +  8.72044698e-08*y*y*y + 8.60491270e-01*x + 5.80511426e-04*x*y + -4.39101569e-08*x*y*y + -5.89743092e-04*x*x + -3.74718041e-07*x*x*y + 6.42016503e-10*x*x*x + -2.84533069e+02;
 }
 
 /* Split the pixbuf into east and west halves (with 2K sides)
@@ -431,31 +503,45 @@ static void _conus_update_end_split(guchar *pixels, guchar *west, guchar *east,
 {
 	g_debug("Conus: update_end_split");
 	guchar *out[] = {west,east};
-	const guchar alphamap[][4] = {
-		{0x04, 0xe9, 0xe7, 0x30},
-		{0x01, 0x9f, 0xf4, 0x60},
-		{0x03, 0x00, 0xf4, 0x90},
-	};
+
+
+	/* Change projection of map so it aligns with the globe */
+
+	/* Copy the image to a temp memory buffer that we use below to copy from for the source of the projection.
+	 * Without this, the projection can end up being used as source data for the next projected pixel.
+	 */
+	int iArrayLengthBytes = sizeof(guchar) * width * height * pxsize;
+	guchar *aOriginalImage = malloc(iArrayLengthBytes);
+	memcpy(aOriginalImage, pixels, iArrayLengthBytes);
+
+	for(int y = 0; y < height; ++y)
+	for(int x = 0; x < width; ++x){
+		int srcX, srcY;
+		_unprojectPoint(x, y, &srcX, &srcY);
+		sPixel* src = _getNearestNonBoarderPixel(aOriginalImage, width, height, pxsize, srcX, srcY);
+		sPixel* dest = _getPixelAt(pixels, width, height, pxsize, x, y);
+		/* Copy pixel data from source to destination pixel */
+		*dest = *src;
+	}
+
+	free(aOriginalImage);
+
+
+
+	/* Split the image into two and alpha-map the image */
 	for (int y = 0; y < height; y++)
 	for (int x = 0; x < width;  x++) {
 		gint subx = x % (width/2);
 		gint idx  = x / (width/2);
 		guchar *src = &pixels[(y*width+x)*pxsize];
 		guchar *dst = &out[idx][(y*(width/2)+subx)*4];
-		if (src[0] > 0xe0 &&
-		    src[1] > 0xe0 &&
-		    src[2] > 0xe0) {
+		dst[0] = src[0];
+		dst[1] = src[1];
+		dst[2] = src[2];
+		dst[3] = 0xff * 0.75;
+		/* Make black background transparent */
+		if(src[0] == 0 && src[1] == 0 && src[2] == 0){
 			dst[3] = 0x00;
-		} else {
-			dst[0] = src[0];
-			dst[1] = src[1];
-			dst[2] = src[2];
-			dst[3] = 0xff * 0.75;
-			for (int j = 0; j < G_N_ELEMENTS(alphamap); j++)
-				if (src[0] == alphamap[j][0] &&
-				    src[1] == alphamap[j][1] &&
-				    src[2] == alphamap[j][2])
-					dst[3] = alphamap[j][3];
 		}
 	}
 }
@@ -520,22 +606,21 @@ gpointer _conus_update_thread(gpointer _conus)
 	/* Find nearest */
 	g_debug("Conus: update_thread - nearest");
 	gboolean offline = grits_viewer_get_offline(conus->viewer);
-	gchar *conus_url = "http://radar.weather.gov/Conus/RadarImg/";
+	// Could also use: https://radar.weather.gov/ridge/standard/CONUS-LARGE_0.gif
+	gchar *conus_url = "https://atlas.niu.edu/analysis/radar/CONUS/archive_b/";
 	gchar *nearest;
-	if (time(NULL) - conus->time < 60*60*5 && !offline) {
-		/* radar.weather.gov is full of lies.
-		 * the index pages get cached and out of date */
-		/* gmtime is not thread safe, but it's not used very often so
-		 * hopefully it'll be alright for now... :-( */
+	if (!offline) {
 		struct tm *tm = gmtime(&conus->time);
-		time_t onthe8 = conus->time - 60*((tm->tm_min+1)%10+1);
-		tm = gmtime(&onthe8);
-		nearest = g_strdup_printf("Conus_%04d%02d%02d_%02d%02d_N0Ronly.gif",
+		time_t nearest5 = conus->time - 60*(tm->tm_min % 5); /* A new CONUS GIF comes out every 5 minutes. Find the GIF that is closest to the requested time. */
+		tm = gmtime(&nearest5);
+		nearest = g_strdup_printf("usrad_b.%04d%02d%02d.%02d%02d.gif",
 				tm->tm_year+1900, tm->tm_mon+1, tm->tm_mday,
 				tm->tm_hour, tm->tm_min);
 	} else {
 		GList *files = grits_http_available(conus->http,
-				"^Conus_[^\"]*_N0Ronly.gif$", "", NULL, NULL);
+				"^usrad_b.[^\"]*.gif$", "", NULL, NULL);
+		//GList *files = grits_http_available(conus->http,
+		//		"^CONUS-LARGE.[^\"]*.gif$", "", NULL, NULL);
 		nearest = _find_nearest(conus->time, files, 6);
 		g_list_foreach(files, (GFunc)g_free, NULL);
 		g_list_free(files);
@@ -590,9 +675,9 @@ RadarConus *radar_conus_new(GtkWidget *pconfig,
 	conus->config  = gtk_alignment_new(0, 0, 1, 1);
 	g_mutex_init(&conus->loading);
 
-	gdouble south =  CONUS_NORTH - CONUS_DEG_PER_PX*CONUS_HEIGHT;
-	gdouble east  =  CONUS_WEST  + CONUS_DEG_PER_PX*CONUS_WIDTH;
-	gdouble mid   =  CONUS_WEST  + CONUS_DEG_PER_PX*CONUS_WIDTH/2;
+	gdouble south =  CONUS_NORTH - CONUS_DEG_PER_PX_VERTICAL*CONUS_HEIGHT;
+	gdouble east  =  CONUS_WEST  + CONUS_DEG_PER_PX_HORIZONTAL*CONUS_WIDTH;
+	gdouble mid   =  CONUS_WEST  + CONUS_DEG_PER_PX_HORIZONTAL*CONUS_WIDTH/2;
 	conus->tile[0] = grits_tile_new(NULL, CONUS_NORTH, south, mid, CONUS_WEST);
 	conus->tile[1] = grits_tile_new(NULL, CONUS_NORTH, south, east, mid);
 	conus->tile[0]->zindex = 2;

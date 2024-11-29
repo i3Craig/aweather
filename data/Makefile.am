@@ -7,6 +7,9 @@ dist_config_DATA = defaults.ini
 fipsdir = $(datadir)/aweather/
 dist_fips_DATA = fips.txt
 
+bordersdir = $(datadir)/aweather/
+dist_borders_DATA = borders.txt
+
 logodir = $(datadir)/aweather/
 dist_logo_DATA = logo.svg
 
