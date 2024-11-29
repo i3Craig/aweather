@@ -1,0 +1,110 @@
+aweather(1)
+===========
+Andy Spencer <andy753421@gmail.com>
+
+NAME
+----
+aweather - Advanced weather reporting program
+
+SYNOPSIS
+--------
+*aweather* [*-hoaf*] [-d 'level'] [-s 'site'] [-t 'time']
+
+DESCRIPTION
+-----------
+AWeather is a advanced weather reporting program which is designed to be used
+by weather enthusiasts. AWeather is not another weather dockapp that simply
+displays a pre-computed forecast. It is designed to be an easy to use program
+that integrates a variety of weather data in simple unified interface; see
+features for more details.
+
+OPTIONS
+-------
+*-h*, *--help*::
+	Show usage.
+
+*-d*, *--debug*='level'::
+	Change default log level*, a debug level ranges from 0 to 5. A debug
+	level of 5 is recommended only for debugging purposes.
+
+*-s*, *--site*='site'::
+	Set initial site. The site should be given as a WSR88D site code such
+	as KLSX. 
+
+*-t*, *--time*='time'::
+	Set initial time. The time format should be provided in the
+	*YYYY-MM-DD HH:MM* format.
+
+*-o*, *--offline*::
+	Run in offline mode, AWeather will not attempt to connect to the
+	internet to download radar files but will show the closest matching
+	cached file.
+
+*-a*, *--autoupdate*::
+	Run in autoupdate mode, AWeather will periodically poll data servers
+	for updated information.
+
+*-f*, *--fullscreen*::
+	Run in fullscreen mode, AWeather start up using the entire screen as he
+	main display area. Toolbars and side panels are hidden by default and
+	can be accessed by moving the mouse to the edge of the screen.
+
+KEY BINDINGS
+------------
+*h*, *j*, *k*, *l*::
+*Left*, *Down*, *Up*, *Right*::
+	Pan the surface of the earth left, down, up, or right.
+
+*i*, *o*::
+*+*, *-*::
+*Scroll up*, *Scroll down*::
+	Zoom towards or away from the surface of the earth.
+
+*J*, *K*::
+	Rotate the camera back or forward. If looking across the surface of the
+	earth, J will point the camera towards ground while K will point the
+	camera towards the sky.
+
+*H*, *L*::
+	Rotate the counter clockwise or clockwise around the vertical axes. If
+	looking across the surface of the earth, H will pan to the left while L
+	will pan to the right.
+
+*w*::
+	Draw a wire frame of the earth for debugging purposes.
+
+*q*::
+	Exit AWeather.
+
+*Tab*::
+	Cycle through available plugins.
+
+*CTRL-R*::
+	Refresh all map data.
+
+*F11*::
+	Toggle full screen mode
+
+MOUSE MOTION
+------------
+*Left-click and drag*::
+	Pan the surface of the earth.
+
+*Middle-click and drag*::
+	Zoom towards (up) or away (down) from the surface of the earth.
+
+*Right-click and drag*::
+	Rotate the camera around the vertical and horizontal axes.
+
+EXAMPLES
+--------
+Start AWeather in offline mode and center the map on the St. Louis radar.::
+`$ aweather -s KLSX -o`
+
+SEE ALSO
+--------
+grits-demo(1)
+
+BUGS
+----
+Many

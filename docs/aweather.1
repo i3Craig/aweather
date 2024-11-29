@@ -1,0 +1,156 @@
+'\" t
+.\"     Title: aweather
+.\"    Author: Andy Spencer <andy753421@gmail.com>
+.\" Generator: DocBook XSL Stylesheets v1.77.1 <http://docbook.sf.net/>
+.\"      Date: 01/28/2013
+.\"    Manual: \ \&
+.\"    Source: \ \&
+.\"  Language: English
+.\"
+.TH "AWEATHER" "1" "01/28/2013" "\ \&" "\ \&"
+.\" -----------------------------------------------------------------
+.\" * Define some portability stuff
+.\" -----------------------------------------------------------------
+.\" ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.\" http://bugs.debian.org/507673
+.\" http://lists.gnu.org/archive/html/groff/2009-02/msg00013.html
+.\" ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.ie \n(.g .ds Aq \(aq
+.el       .ds Aq '
+.\" -----------------------------------------------------------------
+.\" * set default formatting
+.\" -----------------------------------------------------------------
+.\" disable hyphenation
+.nh
+.\" disable justification (adjust text to left margin only)
+.ad l
+.\" -----------------------------------------------------------------
+.\" * MAIN CONTENT STARTS HERE *
+.\" -----------------------------------------------------------------
+.SH "NAME"
+aweather \- Advanced weather reporting program
+.SH "SYNOPSIS"
+.sp
+\fBaweather\fR [\fB\-hoaf\fR] [\-d \fIlevel\fR] [\-s \fIsite\fR] [\-t \fItime\fR]
+.SH "DESCRIPTION"
+.sp
+AWeather is a advanced weather reporting program which is designed to be used by weather enthusiasts\&. AWeather is not another weather dockapp that simply displays a pre\-computed forecast\&. It is designed to be an easy to use program that integrates a variety of weather data in simple unified interface; see features for more details\&.
+.SH "OPTIONS"
+.PP
+\fB\-h\fR, \fB\-\-help\fR
+.RS 4
+Show usage\&.
+.RE
+.PP
+\fB\-d\fR, \fB\-\-debug\fR=\fIlevel\fR
+.RS 4
+Change default log level*, a debug level ranges from 0 to 5\&. A debug level of 5 is recommended only for debugging purposes\&.
+.RE
+.PP
+\fB\-s\fR, \fB\-\-site\fR=\fIsite\fR
+.RS 4
+Set initial site\&. The site should be given as a WSR88D site code such as KLSX\&.
+.RE
+.PP
+\fB\-t\fR, \fB\-\-time\fR=\fItime\fR
+.RS 4
+Set initial time\&. The time format should be provided in the
+\fBYYYY\-MM\-DD HH:MM\fR
+format\&.
+.RE
+.PP
+\fB\-o\fR, \fB\-\-offline\fR
+.RS 4
+Run in offline mode, AWeather will not attempt to connect to the internet to download radar files but will show the closest matching cached file\&.
+.RE
+.PP
+\fB\-a\fR, \fB\-\-autoupdate\fR
+.RS 4
+Run in autoupdate mode, AWeather will periodically poll data servers for updated information\&.
+.RE
+.PP
+\fB\-f\fR, \fB\-\-fullscreen\fR
+.RS 4
+Run in fullscreen mode, AWeather start up using the entire screen as he main display area\&. Toolbars and side panels are hidden by default and can be accessed by moving the mouse to the edge of the screen\&.
+.RE
+.SH "KEY BINDINGS"
+.PP
+\fBh\fR, \fBj\fR, \fBk\fR, \fBl\fR, \fBLeft\fR, \fBDown\fR, \fBUp\fR, \fBRight\fR
+.RS 4
+Pan the surface of the earth left, down, up, or right\&.
+.RE
+.PP
+\fBi\fR, \fBo\fR, \fB+\fR, \fB\-\fR, \fBScroll up\fR, \fBScroll down\fR
+.RS 4
+Zoom towards or away from the surface of the earth\&.
+.RE
+.PP
+\fBJ\fR, \fBK\fR
+.RS 4
+Rotate the camera back or forward\&. If looking across the surface of the earth, J will point the camera towards ground while K will point the camera towards the sky\&.
+.RE
+.PP
+\fBH\fR, \fBL\fR
+.RS 4
+Rotate the counter clockwise or clockwise around the vertical axes\&. If looking across the surface of the earth, H will pan to the left while L will pan to the right\&.
+.RE
+.PP
+\fBw\fR
+.RS 4
+Draw a wire frame of the earth for debugging purposes\&.
+.RE
+.PP
+\fBq\fR
+.RS 4
+Exit AWeather\&.
+.RE
+.PP
+\fBTab\fR
+.RS 4
+Cycle through available plugins\&.
+.RE
+.PP
+\fBCTRL\-R\fR
+.RS 4
+Refresh all map data\&.
+.RE
+.PP
+\fBF11\fR
+.RS 4
+Toggle full screen mode
+.RE
+.SH "MOUSE MOTION"
+.PP
+\fBLeft\-click and drag\fR
+.RS 4
+Pan the surface of the earth\&.
+.RE
+.PP
+\fBMiddle\-click and drag\fR
+.RS 4
+Zoom towards (up) or away (down) from the surface of the earth\&.
+.RE
+.PP
+\fBRight\-click and drag\fR
+.RS 4
+Rotate the camera around the vertical and horizontal axes\&.
+.RE
+.SH "EXAMPLES"
+.PP
+Start AWeather in offline mode and center the map on the St\&. Louis radar\&.
+.RS 4
+
+$ aweather \-s KLSX \-o
+.RE
+.SH "SEE ALSO"
+.sp
+grits\-demo(1)
+.SH "BUGS"
+.sp
+Many
+.SH "AUTHOR"
+.PP
+\fBAndy Spencer\fR <\&andy753421@gmail\&.com\&>
+.RS 4
+Author.
+.RE

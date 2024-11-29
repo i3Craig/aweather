@@ -1,0 +1,25 @@
+Road plan
+---------
+0.4.x - Bug fixes:
+  * Fix MESA issues
+
+0.x - Misc:
+  * Fix all memory leaks
+  * Pre-load textures and polys in OpenGL
+
+0.x - Volume scans:
+  * Display iso surfaces of volume scans
+
+0.x - Animation:
+  * Loop though times
+
+0.x - More data:
+  * Derived from Level 2:
+    * Composite reflectivity
+    * Storm relative motion
+    * Echo tops
+  * Warning/watch boxes
+  * Fronts
+  * Air pressure
+
+# vim: ft=txt
