@@ -16,6 +16,9 @@ Nonfunctional plugins:
 - elev: Previously adjusted the elevation of points on the map to reflect elevation changes in the world. API no longer exists. No drop-in replacement found.
 - sat: Displays static satellite imagery on the map instead of the OSM imagery from the map plugin. API no longer exists. No drop-in replacement found.
 
+Installation
+- Arch Linux: Available in the AUR (https://aur.archlinux.org/packages/aweather-git)
+
 Original data sources for elevation and satellite imagery:
 Ground    (WMS) - http://www.nasa.network.com/wms
 Elevation (WMS) - http://www.nasa.network.com/elev
