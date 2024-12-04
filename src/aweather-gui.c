@@ -313,8 +313,22 @@ static void update_time_widget(GritsViewer *viewer, time_t time, AWeatherGui *se
 	gchar* cTimeString = g_strdup_printf("%02i:%02iZ", tm->tm_hour, tm->tm_min);
 	g_debug("AweatherGui: update_time_widget - cTimeString: %s, time: %ld", cTimeString, (long)time);
 	if (gtk_tree_model_find_string(model, &iter, NULL, 0, cTimeString)) {
+		
+		/* Expant the selection if it is hidden behind an hour 'parent' row */
+		GtkTreeIter parentIterator;
+		if(gtk_tree_model_iter_parent(model, &parentIterator, &iter)){
+			GtkTreePath *parentPath = gtk_tree_model_get_path(model, &parentIterator);
+			gtk_tree_view_expand_row(tview, parentPath, FALSE);
+			gtk_tree_path_free(parentPath);
+		}
+
+		/* Select the current time requested */
 		GtkTreePath *path = gtk_tree_model_get_path(model, &iter);
 		gtk_tree_view_set_cursor(tview, path, NULL, FALSE);
+
+		/* Scroll the selected element into view */
+		gtk_tree_view_scroll_to_cell(tview, path, NULL, FALSE, 0.0, 0.0);
+
 		gtk_tree_path_free(path);
 	}
 	g_free(cTimeString);
@@ -487,7 +501,7 @@ static void time_setup(AWeatherGui *self)
 	
 	/* Default to the closest hour, rounding down if we are in the middle of an hour. */
 	time_t gritsTime = grits_viewer_get_time(self->viewer);
-	gritsTime -= gritsTime % (60 * 60);
+	gritsTime -= 2 * 60; /* Move back 2 minutes to reduce the chance of reading corrupt or incomplete data from the servers. */
 	grits_viewer_set_time(self->viewer, gritsTime);
 	/* Display the current time the system is set to on startup */
 	update_time_widget(NULL, grits_viewer_get_time(self->viewer), self);
