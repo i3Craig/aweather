@@ -90,6 +90,11 @@ int main(int argc, char **argv)
 		//g_debug("size=%08x", size);
 		//g_debug("read %u bytes", st);
 		//fwrite(&size, 1, 4, output); // DEBUG
+		/* Note: This line was previously ABS(g_ntohl(size)), but this did not work, causing the last block in the NEXRAD data stream to fail to decompress (size < 0).
+		 * This might be because ABS is a macro and the parameter was a function. Hence, evaulating the macro resulted in multiple evaluations of g_ntohl.
+		 * Whatever, the case, splitting up the calls to two lines fixes the bug. This allows the full NEXRAD data stream to be deompressed, thus fixing the issue
+		 * where the upper most scan was missing about 100 rays.
+		 */
 		size = g_ntohl(size);
 		size = ABS(size);
 		if (size < 0)
