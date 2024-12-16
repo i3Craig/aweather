@@ -90,7 +90,8 @@ int main(int argc, char **argv)
 		//g_debug("size=%08x", size);
 		//g_debug("read %u bytes", st);
 		//fwrite(&size, 1, 4, output); // DEBUG
-		size = ABS(g_ntohl(size));
+		size = g_ntohl(size);
+		size = ABS(size);
 		if (size < 0)
 			return 0;
 		//g_debug("size = %x", size);
