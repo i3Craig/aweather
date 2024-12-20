@@ -353,14 +353,18 @@ static gboolean _set_sweep_cb(gpointer _level2)
 	return FALSE;
 }
 void aweather_level2_set_sweep(AWeatherLevel2 *level2,
-		int type, float elev)
+		int type, int ipiSweepIndex)
 {
-	g_debug("AWeatherLevel2: set_sweep - %d %f", type, elev);
+	g_debug("AWeatherLevel2: set_sweep - Type: %d, SweepIndex: %i", type, ipiSweepIndex);
 
 	/* Find sweep */
 	Volume *volume = RSL_get_volume(level2->radar, type);
 	if (!volume) return;
-	level2->sweep = RSL_get_closest_sweep(volume, elev, 90);
+	if(ipiSweepIndex < 0 || ipiSweepIndex >= volume->h.nsweeps){
+		g_error("Error: Invalid sweep index passed in: %i. Number of sweeps: %i", ipiSweepIndex, volume->h.nsweeps);
+		return;
+	}
+	level2->sweep = volume->sweep[ipiSweepIndex];
 	if (!level2->sweep) return;
 
 	/* Find colormap */
@@ -461,8 +465,8 @@ static void _on_sweep_clicked(GtkRadioButton *button, gpointer _level2)
 	AWeatherLevel2 *level2 = _level2;
 	if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(button))) {
 		gint type = (glong)g_object_get_data(G_OBJECT(button), "type");
-		gint elev = (glong)g_object_get_data(G_OBJECT(button), "elev");
-		aweather_level2_set_sweep(level2, type, (float)elev/100);
+		gint sweepIndex = (glong)g_object_get_data(G_OBJECT(button), "sweepIndex");
+		aweather_level2_set_sweep(level2, type, sweepIndex);
 		//level2->colormap = level2->sweep_colors;
 	}
 }
@@ -554,6 +558,10 @@ GtkWidget *aweather_level2_get_config(AWeatherLevel2 *level2)
 			g_object_set_data(G_OBJECT(button), "level2", level2);
 			g_object_set_data(G_OBJECT(button), "type", (gpointer)(guintptr)vi);
 			g_object_set_data(G_OBJECT(button), "elev", (gpointer)(guintptr)(elev*100));
+			/* Save off the index of this sweep so we can access it later.
+			 *  Sometimes there are two sweeps at the same elevation, making it impossible to tell which one the user wants to view.
+			 */
+			g_object_set_data(G_OBJECT(button), "sweepIndex", (gpointer)(guintptr)si);
 			g_signal_connect(button, "clicked", G_CALLBACK(_on_sweep_clicked), level2);
 		}
 	}

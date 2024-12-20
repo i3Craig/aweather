@@ -59,7 +59,7 @@ AWeatherLevel2 *aweather_level2_new_from_file(const gchar *file, const gchar *si
 		AWeatherColormap *colormap);
 
 void aweather_level2_set_sweep(AWeatherLevel2 *level2,
-		int type, gfloat elev);
+		int type, int ipiSweepIndex);
 
 void aweather_level2_set_iso(AWeatherLevel2 *level2, gfloat level);
 
