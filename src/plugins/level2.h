@@ -43,6 +43,8 @@ struct _AWeatherLevel2 {
 	AWeatherColormap *sweep_colors;
 	gdouble           sweep_coords[2];
 	guint             sweep_tex;
+
+	GtkWidget	*date_label; /* Pointer to the date label in the GUI so we can update the text dynamically */
 };
 
 struct _AWeatherLevel2Class {

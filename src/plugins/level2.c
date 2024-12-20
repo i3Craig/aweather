@@ -20,6 +20,7 @@
 #include <glib/gstdio.h>
 #include <grits.h>
 #include <rsl.h>
+#include <stdbool.h>
 
 #include "level2.h"
 
@@ -28,13 +29,49 @@
 #define ISO_MIN 30
 #define ISO_MAX 80
 
+/* Structure to store the date and time from the RSL structure, allowing us to store the start and stop times for a sweep */
+typedef struct{
+  int   month; /* Time for this ray; month (1-12). */
+  int   day;   /* Time for this ray; day (1-31).   */
+  int   year;  /* Time for this ray; year (eg. 1993). */
+  int   hour;  /* Date for this ray; hour (0-23). */
+  int   minute;/* Date for this ray; minute (0-59).*/
+  float sec;   /* Date for this ray; second + fraction of second. */
+} RslDateTime;
+
+
 /**************************
  * Data loading functions *
  **************************/
-/* Convert a sweep to an 2d array of data points */
+
+/* Copies the date and time info from the ray header passed in into the given RSL date time struct */
+static void _copyRayHeaderDateTimeToRslDateTimeStruct(Ray_header* rayHeader, RslDateTime* dateTime){
+	dateTime->month = rayHeader->month;
+	dateTime->day = rayHeader->day;
+	dateTime->year = rayHeader->year;
+	dateTime->hour = rayHeader->hour;
+	dateTime->minute = rayHeader->minute;
+	dateTime->sec = rayHeader->sec;
+}
+
+/* Returns TRUE if the ray (header) A was captured before ray (header) B in a sweep. */
+static bool _isRayABeforeRayB(Ray_header* rayHeaderA, Ray_header* rayHeaderB){
+	return rayHeaderA->year < rayHeaderB->year
+		|| (rayHeaderA->year	== rayHeaderB->year	&& rayHeaderA->month	< rayHeaderB->month)
+		|| (rayHeaderA->month	== rayHeaderB->month	&& rayHeaderA->day	< rayHeaderB->day)
+		|| (rayHeaderA->day	== rayHeaderB->day	&& rayHeaderA->hour	< rayHeaderB->hour)
+		|| (rayHeaderA->hour	== rayHeaderB->hour	&& rayHeaderA->minute	< rayHeaderB->minute)
+		|| (rayHeaderA->minute	== rayHeaderB->minute	&& rayHeaderA->sec	< rayHeaderB->sec);
+}
+
+/* Convert a sweep to an 2d array of data points. Also returns the date+time of when the sweep started and finished (pass in valid pointers to RslDateTime) */
 static void _bscan_sweep(Sweep *sweep, AWeatherColormap *colormap,
-		guint8 **data, int *width, int *height)
+		guint8 **data, int *width, int *height,
+	       	RslDateTime* sweepStartTime, RslDateTime* sweepFinishTime)
 {
+	/* Stores the oldest and newest ray header so we can determine the scan start and finish time */
+	Ray_header* oldestRayHeader, *newestRayHeader;
+
 	g_debug("AWeatherLevel2: _bscan_sweep - %p, %p, %p",
 			sweep, colormap, data);
 	/* Calculate max number of bins */
@@ -45,9 +82,21 @@ static void _bscan_sweep(Sweep *sweep, AWeatherColormap *colormap,
 	/* Allocate buffer using max number of bins for each ray */
 	guint8 *buf = g_malloc0(sweep->h.nrays * max_bins * 4);
 
+	/* Initialize the oldest and newest ray headers so they are not null */
+	oldestRayHeader = &sweep->ray[0]->h;
+	newestRayHeader = &sweep->ray[0]->h;
+	
 	/* Fill the data */
 	for (int ri = 0; ri < sweep->h.nrays; ri++) {
 		Ray *ray  = sweep->ray[ri];
+
+		if(_isRayABeforeRayB(newestRayHeader, &ray->h)){
+			newestRayHeader = &ray->h;
+		}
+		if(_isRayABeforeRayB(&ray->h, oldestRayHeader)){
+			oldestRayHeader = &ray->h;
+		}
+
 		for (int bi = 0; bi < ray->h.nbins; bi++) {
 			guint  buf_i = (ri*max_bins+bi)*4;
 			float  value = ray->h.f(ray->range[bi]);
@@ -72,6 +121,11 @@ static void _bscan_sweep(Sweep *sweep, AWeatherColormap *colormap,
 	*width  = max_bins;
 	*height = sweep->h.nrays;
 	*data   = buf;
+
+	/* Get the oldest ray - this is when the sweep started. The newest ray in the sweep will contain the sweep end date + time. */
+	_copyRayHeaderDateTimeToRslDateTimeStruct(oldestRayHeader, sweepStartTime);
+	_copyRayHeaderDateTimeToRslDateTimeStruct(newestRayHeader, sweepFinishTime);
+
 }
 
 /* Load a sweep into an OpenGL texture */
@@ -80,7 +134,8 @@ static void _load_sweep_gl(AWeatherLevel2 *level2)
 	g_debug("AWeatherLevel2: _load_sweep_gl");
 	guint8 *data;
 	gint width, height;
-	_bscan_sweep(level2->sweep, level2->sweep_colors, &data, &width, &height);
+	RslDateTime sweepStartTime, sweepFinishTime;
+	_bscan_sweep(level2->sweep, level2->sweep_colors, &data, &width, &height, &sweepStartTime, &sweepFinishTime);
 	gint tex_width  = pow(2, ceil(log(width )/log(2)));
 	gint tex_height = pow(2, ceil(log(height)/log(2)));
 	level2->sweep_coords[0] = (double)width  / tex_width;
@@ -99,6 +154,17 @@ static void _load_sweep_gl(AWeatherLevel2 *level2)
 	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
 	g_free(data);
+
+	/* Update the GUI to show the user when the sweep started and ended */
+	if(level2->date_label != NULL){
+		gchar *date_str = g_strdup_printf("<b><i>%04d-%02d-%02d %02d:%02d:%02.0f - %02d:%02d:%02.0f</i></b>",
+			sweepStartTime.year, sweepStartTime.month, sweepStartTime.day,
+			sweepStartTime.hour, sweepStartTime.minute, sweepStartTime.sec,
+			sweepFinishTime.hour, sweepFinishTime.minute, sweepFinishTime.sec);
+		gtk_label_set_markup(GTK_LABEL(level2->date_label), date_str);
+		g_free(date_str);
+	}
+
 }
 
 /* Decompress a radar file using wsr88dec */
@@ -433,6 +499,8 @@ GtkWidget *aweather_level2_get_config(AWeatherLevel2 *level2)
 	gtk_table_attach(GTK_TABLE(table), date_label,
 			0,1, 0,1, GTK_FILL,GTK_FILL, 5,0);
 	g_free(date_str);
+	/* Copy over out pointer to the date label so we can update the text dynamically later */
+	level2->date_label = date_label;
 
 	/* Add sweeps */
 	for (guint vi = 0; vi < radar->h.nvolumes; vi++) {
