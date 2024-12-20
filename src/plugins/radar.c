@@ -136,8 +136,18 @@ gboolean _site_update_end(gpointer _site)
 		aweather_bin_set_child(GTK_BIN(site->config), box);
 		g_free(uri);
 	} else {
-		aweather_bin_set_child(GTK_BIN(site->config),
-				aweather_level2_get_config(site->level2));
+		/* Wrap the radar sweep / volume UI in a GtkScrolledWindow so that we don't use up too much screen space displaying all radar options on small screens.*/
+		GtkWidget *sweepSelectionUiWidget = aweather_level2_get_config(site->level2);
+		GtkWidget *scrolled_window = gtk_scrolled_window_new(NULL, NULL);
+
+		/* Automatically show the scrollbars */
+		gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled_window),GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
+
+		/* Add the radar options UI to the scrolled window */
+		gtk_scrolled_window_add_with_viewport(GTK_SCROLLED_WINDOW(scrolled_window), sweepSelectionUiWidget);
+
+		/* Add the scrolled window to the config bin */
+		aweather_bin_set_child(GTK_BIN(site->config), scrolled_window);
 	}
 	site->status = STATUS_LOADED;
 	site->idle_source = 0;
