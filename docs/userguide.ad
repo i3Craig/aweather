@@ -2,8 +2,8 @@ AWeather Users Guide
 ====================
 :Author:   Jason Holmes
 :Email:    <Doppler5@aol.com>
-:Date:     2013-01-28
-:Revision: 0.8
+:Date:     2025-01-19
+:Revision: 0.9
 :Website:  http://pileus.org/aweather/
 
 About and contact information
@@ -69,14 +69,17 @@ The following Level II data types are supported by this program:
   horizontal and vertical power returns) footnoteref:[dualpol,Only available at
   WSR-88D sites that have been upgraded to support dual-polarization]
 
+- Clutter Filter Power removed (CFP)
+
 Level II data has been available through private weather data vendors for some
-time but recently has been generously provided by some universities.
+time but recently has been generously provided by the
+NOAA Operational Model Archive and Distribution System (NOMADS).
 
 AWeather requires an active internet connection along with a data source in
 order to retrieve, decode and display current or recent radar data.
 
-The default radar feed is publically accessible thanks to Iowa State University
-and is located at: http://mesonet.agron.iastate.edu/data/nexrd2/raw/.
+The default radar feed is publically accessible thanks to NOMADS
+and is located at: https://nomads.ncep.noaa.gov/pub/data/nccf/radar/nexrad_level2/.
 
 AWeather also displays some severe weather alerts provided by the NOAA weather
 alerts http://alerts.weather.gov/[feed].
@@ -85,6 +88,9 @@ When run under Linux, AWeather can interface with the
 http://www.catb.org/gpsd/[GPSd] location services to track and display the
 user's current location.
 
+The contintal US radar overlay (displayed when no NEXRAD site is selected) is
+provided by the Northern Illinois University at the URL:
+https://atlas.niu.edu/analysis/radar/CONUS/archive_b/.
 
 Program layout
 --------------
@@ -120,6 +126,15 @@ Preferences:: opens the preferences window, which contains the following
 		                         to jump to when the program loads
 		NEXRAD URL text box::::  allows the user to select a different server to
 		                         download Level-II NEXRAD data from
+		Animation Frames::::     allows the user to choose how many NEXRAD
+		                         Level 2 files are loaded for animating.
+		Animation Frame Interval (ms)::::  allows the user to choose how
+		                         long each NEXRAD Level 2 frame is displayed on
+		                         the screen for while animating.
+		Animation End Frame Hold (ms)::::  allows the user to specify how long
+		                         the last frame of the animation is displayed
+		                         for in addition to the normal animation frame
+		                         interval time.
 		Debug level text box:::: allows the user to select what level of
 		                         debugging the program should conduct while
 		                         running (7 is recommended only for debugging)
@@ -128,7 +143,9 @@ Preferences:: opens the preferences window, which contains the following
 
 [horizontal]
 		alert checkbox::::       allows the user to toggle the weather alerts
+		borders checkbox::::     allows the user to toggle state borders
 		elev checkbox::::        allows the user to toggle terrain rendering
+		                         (No longer functional)
 		env checkbox::::         allows the user to toggle a blue atmosphere and
 		                         compass rose
 		gps checkbox::::         allows the user to toggle gps tracking
@@ -136,6 +153,7 @@ Preferences:: opens the preferences window, which contains the following
 		map checkbox::::         allows the user to toggle the map overlays
 		radar checkbox::::       allows the user to toggle the radar data
 		sat checkbox::::         allows the user to toggle satellite ground images
+		                         (No longer functional)
 		test checkbox::::        used by the developers for debugging
 
 View
@@ -182,7 +200,7 @@ The date and time side bar resides on the right side of the program window, it c
 
 * The time button, which reveals a list of each hour when clicked
 
-** Clicking on an hour will reveal a list of times in 5 minute intervals that
+** Clicking on an hour will reveal a list of times in 1 minute intervals that
    the user can select to load radar data from footnote:[Radar data can only be
    loaded if it has been previously cached or is from a recent enough date and
    can still be obtained from the NEXRAD server]
@@ -207,6 +225,27 @@ All active radar sites will show as tabs while site's available tilt and product
 data will display to the right of the tab.
 
 Simply click on a button to display that product/tilt in the map window.
+The time the radar site started and finished collecting data for the selected
+Product is shown to the left of the product selection grid.
+
+Above this time is the "Animate" button. Select this button to put the radar
+at the selected site into motion. While the animatin is running, the user
+can select any product / elevation from the selection grid or change the
+isosurface slider to change the product shown in the animation.
+
+While the animation is running, a toggle button shows up for each NEXRAD
+Level 2 file that was downloaded, to the right of the animate button.
+Click these buttons to toggle them. When the button is toggled on (crossed off),
+the frame will be skipped in the animation.
+Use the left arrow button (keyboard shortcut = ,) or right arrow button
+(keyboard shortcut = .) to manually move through the animation.
+Use the play button to resume the animation (keybaord shortcut = /).
+
+Note that some sites provide multiple sweeps at the same elevation for the same product
+at different times in the same NEXRAD Level 2 file. If this is the case for the selected
+product / elevation, the application will automatically show those sweeps in chronological
+order as the animation is running. When this happens, the current frame count shown
+in the frame selection toggle buttons will increase beyond 1.
 
 An isosurface slider is shown below the product/tilt buttons.  Slide the
 selector to reveal the rendered isosurface structure of reflectivity data.
@@ -269,6 +308,9 @@ Keyboard shortcuts::
 	Tab:::                Cycle through available plugins
 	Escape:::             Close the currently active dialog box
 	CTRL+R:::             Refresh the display
+	,:::                  When animating, jump to the previous frame (comma)
+	.:::                  When animating, jump to the next frame (period)
+	/:::                  When animating, pause or play the animatin (slash)
 
 
 Command Line Options
@@ -318,8 +360,8 @@ Some of these enhancements include:
 	* Support for derived L3 data (storm relative motion, echo tops, composite
 	  reflectivity, etc)
 	* Additional data sources for surface data, etc
-	* Animation support
 	* API for radar algorithms
 	* Additional features
+	* Porting to GTK3 (currently using GTK2)
 
 // vim: ft=asciidoc ts=4 tw=80

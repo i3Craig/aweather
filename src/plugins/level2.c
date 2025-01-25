@@ -15,6 +15,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <bits/types/locale_t.h>
 #include <config.h>
 #include <math.h>
 #include <glib/gstdio.h>
@@ -29,23 +30,21 @@
 #define ISO_MIN 30
 #define ISO_MAX 80
 
-/* Structure to store the date and time from the RSL structure, allowing us to store the start and stop times for a sweep */
-typedef struct{
-  int   month; /* Time for this ray; month (1-12). */
-  int   day;   /* Time for this ray; day (1-31).   */
-  int   year;  /* Time for this ray; year (eg. 1993). */
-  int   hour;  /* Date for this ray; hour (0-23). */
-  int   minute;/* Date for this ray; minute (0-59).*/
-  float sec;   /* Date for this ray; second + fraction of second. */
-} RslDateTime;
 
+/* Structure to store additional data associated with a sweep selection button, allowing us to align the buttons in a grid based on elevation and volume. */
+typedef struct {
+	double elevation; /* stores the elevation that this button will select */
+	guint instance; /* Stores an ID that makes this elevation unique. That is, if there is more than one sweep in the same volume at the same elevation, this will be set to a number > 1 */
+	int iRowIndex; /* Stores the row that this button will go into */
+	GtkWidget* objSweepSelectionButton; /* Stores the button that will be put in the UI sweep selection table */
+} SweepSelectionButtonInfo;
 
 /**************************
  * Data loading functions *
  **************************/
 
 /* Copies the date and time info from the ray header passed in into the given RSL date time struct */
-static void _copyRayHeaderDateTimeToRslDateTimeStruct(Ray_header* rayHeader, RslDateTime* dateTime){
+void copyRayHeaderDateTimeToRslDateTimeStruct(Ray_header* rayHeader, RslDateTime* dateTime){
 	dateTime->month = rayHeader->month;
 	dateTime->day = rayHeader->day;
 	dateTime->year = rayHeader->year;
@@ -55,7 +54,7 @@ static void _copyRayHeaderDateTimeToRslDateTimeStruct(Ray_header* rayHeader, Rsl
 }
 
 /* Returns TRUE if the ray (header) A was captured before ray (header) B in a sweep. */
-static bool _isRayABeforeRayB(Ray_header* rayHeaderA, Ray_header* rayHeaderB){
+bool isRayABeforeRayB(Ray_header* rayHeaderA, Ray_header* rayHeaderB){
 	return rayHeaderA->year < rayHeaderB->year
 		|| (rayHeaderA->year	== rayHeaderB->year	&& rayHeaderA->month	< rayHeaderB->month)
 		|| (rayHeaderA->month	== rayHeaderB->month	&& rayHeaderA->day	< rayHeaderB->day)
@@ -64,14 +63,119 @@ static bool _isRayABeforeRayB(Ray_header* rayHeaderA, Ray_header* rayHeaderB){
 		|| (rayHeaderA->minute	== rayHeaderB->minute	&& rayHeaderA->sec	< rayHeaderB->sec);
 }
 
-/* Convert a sweep to an 2d array of data points. Also returns the date+time of when the sweep started and finished (pass in valid pointers to RslDateTime) */
-static void _bscan_sweep(Sweep *sweep, AWeatherColormap *colormap,
-		guint8 **data, int *width, int *height,
-	       	RslDateTime* sweepStartTime, RslDateTime* sweepFinishTime)
-{
+/* Returns TRUE if the RslDateTime A is before RslDateTime B chronologically. */
+bool isRslDateTimeABeforeB(const RslDateTime* rslDateTimeA, const RslDateTime* rslDateTimeB){
+	return rslDateTimeA->year < rslDateTimeB->year
+		|| (rslDateTimeA->year		== rslDateTimeB->year	&& rslDateTimeA->month	< rslDateTimeB->month)
+		|| (rslDateTimeA->month		== rslDateTimeB->month	&& rslDateTimeA->day	< rslDateTimeB->day)
+		|| (rslDateTimeA->day		== rslDateTimeB->day	&& rslDateTimeA->hour	< rslDateTimeB->hour)
+		|| (rslDateTimeA->hour		== rslDateTimeB->hour	&& rslDateTimeA->minute	< rslDateTimeB->minute)
+		|| (rslDateTimeA->minute	== rslDateTimeB->minute	&& rslDateTimeA->sec	< rslDateTimeB->sec);
+}
+
+/* Determines when the sweep passed in started and finished. Pass pointers to two RslDateTime structs that will be populated with the specified information if available in the sweep. */
+void getSweepStartAndEndTime(Sweep *sweep, RslDateTime* sweepStartTime, RslDateTime* sweepFinishTime){
 	/* Stores the oldest and newest ray header so we can determine the scan start and finish time */
 	Ray_header* oldestRayHeader, *newestRayHeader;
 
+	/* Initialize the oldest and newest ray headers so they are not null */
+	oldestRayHeader = &sweep->ray[0]->h;
+	newestRayHeader = &sweep->ray[0]->h;
+	
+	/* Find the oldest and newest rays. */
+	for (int ri = 0; ri < sweep->h.nrays; ri++) {
+		Ray *ray  = sweep->ray[ri];
+
+		if(isRayABeforeRayB(newestRayHeader, &ray->h)){
+			newestRayHeader = &ray->h;
+		}
+		if(isRayABeforeRayB(&ray->h, oldestRayHeader)){
+			oldestRayHeader = &ray->h;
+		}
+	} /* For each ray in the sweep */
+
+	/* Get the oldest ray - this is when the sweep started. The newest ray in the sweep will contain the sweep end date + time. */
+	copyRayHeaderDateTimeToRslDateTimeStruct(oldestRayHeader, sweepStartTime);
+	copyRayHeaderDateTimeToRslDateTimeStruct(newestRayHeader, sweepFinishTime);
+}
+
+gchar* formatSweepStartAndEndTimeForDisplay(RslDateTime* sweepStartTime, RslDateTime* sweepFinishTime){
+	gchar *date_str = g_strdup_printf("<b><i>%04d-%02d-%02d %02d:%02d:%02.0f - %02d:%02d:%02.0f</i></b>",
+		sweepStartTime->year, sweepStartTime->month, sweepStartTime->day,
+		sweepStartTime->hour, sweepStartTime->minute, sweepStartTime->sec,
+		sweepFinishTime->hour, sweepFinishTime->minute, sweepFinishTime->sec);
+	return date_str;
+}
+
+time_t getTimeTFromRslDateTime(RslDateTime* rslDateTime){
+	struct tm tm_time = {0};
+
+	/* Copy RslDateTime over to the tm struct */
+	tm_time.tm_year = rslDateTime->year - 1900; /* Stores years since 1900 */
+	tm_time.tm_mon = rslDateTime->month - 1; /* Stores months as 0 to 11 */
+	tm_time.tm_mday = rslDateTime->day;
+	tm_time.tm_hour = rslDateTime->hour;
+	tm_time.tm_min = rslDateTime->minute;
+	tm_time.tm_sec = (int)rslDateTime->sec;
+
+	/* Convert the time struct into a time_t integer to return */
+	time_t utc_time = timegm(&tm_time);
+
+	return utc_time;
+}
+
+
+/* Returns true if the elevations should be considered to be at the same elevation (are within a hard-coded deviation). Returns false otherwise */
+bool aweatherLevel2AreTheseElevationsTheSame(float ipdElevationA, float ipdElevationB){
+	/* Allow for up to 0.1 degrees of difference in elevation to consider the sweep to be at the same elevation */
+	float dMaxAllowedElevationDeviation = 0.1;
+
+	float dAngleDelta = ipdElevationA - ipdElevationB;
+	float dAngleDeltaAbsolute = ABS(dAngleDelta);
+	return dAngleDeltaAbsolute < dMaxAllowedElevationDeviation;
+}
+
+/* Returns an array (GArray) of sweep indexes for the specified volume id ("type") sorted by sweep start time (oldest to newest). An empty array is returned of no sweeps are found matching the specified criteria.
+ * The returned GArray must be released via g_array_free.
+ */
+GArray* aweatherLevel2GetAllSweepsFromVolumeWithElevationSortedBySweepStartTime(AWeatherLevel2* level2, int ipiVolumeId, float ipdElevation){
+	/* Output array we return */
+	GArray* opobjArray = g_array_new(FALSE, FALSE, sizeof(RslSweepDateTime));
+	
+	Volume *volume = RSL_get_volume(level2->radar, ipiVolumeId);
+	if(volume == NULL) goto out;
+
+	/* Find all sweeps in the selected volume that are very close to the requested angle. */
+	for(int iSweep = 0; iSweep < volume->h.nsweeps; ++iSweep){
+		Sweep *sweep = volume->sweep[iSweep];
+		if(aweatherLevel2AreTheseElevationsTheSame(sweep->h.elev, ipdElevation)){
+			RslSweepDateTime sweepInfo;
+			sweepInfo.iVolumeId = ipiVolumeId;
+			sweepInfo.iSweepId = iSweep;
+			getSweepStartAndEndTime(sweep, &sweepInfo.startDateTime, &sweepInfo.finishDateTime);
+			g_array_append_val(opobjArray, sweepInfo);
+		} /* If angle is within allowed tolerance */
+	} /* For each sweep */
+
+	/* Sort the sweeps by sweep start time */
+	gint fCompareSweeps(const void* a, const void* b){
+		const RslSweepDateTime *sweepInfoA = a;
+		const RslSweepDateTime *sweepInfoB = b;
+
+		return !isRslDateTimeABeforeB(&sweepInfoA->startDateTime, &sweepInfoB->finishDateTime);
+	};
+
+
+	g_array_sort(opobjArray, fCompareSweeps);
+
+out:
+	return opobjArray;
+}
+
+/* Convert a sweep to an 2d array of data points. */
+static void _bscan_sweep(Sweep *sweep, AWeatherColormap *colormap,
+		guint8 **data, int *width, int *height)
+{
 	g_debug("AWeatherLevel2: _bscan_sweep - %p, %p, %p",
 			sweep, colormap, data);
 	/* Calculate max number of bins */
@@ -82,20 +186,9 @@ static void _bscan_sweep(Sweep *sweep, AWeatherColormap *colormap,
 	/* Allocate buffer using max number of bins for each ray */
 	guint8 *buf = g_malloc0(sweep->h.nrays * max_bins * 4);
 
-	/* Initialize the oldest and newest ray headers so they are not null */
-	oldestRayHeader = &sweep->ray[0]->h;
-	newestRayHeader = &sweep->ray[0]->h;
-	
 	/* Fill the data */
 	for (int ri = 0; ri < sweep->h.nrays; ri++) {
 		Ray *ray  = sweep->ray[ri];
-
-		if(_isRayABeforeRayB(newestRayHeader, &ray->h)){
-			newestRayHeader = &ray->h;
-		}
-		if(_isRayABeforeRayB(&ray->h, oldestRayHeader)){
-			oldestRayHeader = &ray->h;
-		}
 
 		for (int bi = 0; bi < ray->h.nbins; bi++) {
 			guint  buf_i = (ri*max_bins+bi)*4;
@@ -121,11 +214,6 @@ static void _bscan_sweep(Sweep *sweep, AWeatherColormap *colormap,
 	*width  = max_bins;
 	*height = sweep->h.nrays;
 	*data   = buf;
-
-	/* Get the oldest ray - this is when the sweep started. The newest ray in the sweep will contain the sweep end date + time. */
-	_copyRayHeaderDateTimeToRslDateTimeStruct(oldestRayHeader, sweepStartTime);
-	_copyRayHeaderDateTimeToRslDateTimeStruct(newestRayHeader, sweepFinishTime);
-
 }
 
 /* Load a sweep into an OpenGL texture */
@@ -134,8 +222,7 @@ static void _load_sweep_gl(AWeatherLevel2 *level2)
 	g_debug("AWeatherLevel2: _load_sweep_gl");
 	guint8 *data;
 	gint width, height;
-	RslDateTime sweepStartTime, sweepFinishTime;
-	_bscan_sweep(level2->sweep, level2->sweep_colors, &data, &width, &height, &sweepStartTime, &sweepFinishTime);
+	_bscan_sweep(level2->sweep, level2->sweep_colors, &data, &width, &height);
 	gint tex_width  = pow(2, ceil(log(width )/log(2)));
 	gint tex_height = pow(2, ceil(log(height)/log(2)));
 	level2->sweep_coords[0] = (double)width  / tex_width;
@@ -154,13 +241,14 @@ static void _load_sweep_gl(AWeatherLevel2 *level2)
 	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
 	g_free(data);
+}
 
+static void _updateSweepTimestampGui(AWeatherLevel2* level2){
 	/* Update the GUI to show the user when the sweep started and ended */
+	RslDateTime sweepStartTime, sweepFinishTime;
 	if(level2->date_label != NULL){
-		gchar *date_str = g_strdup_printf("<b><i>%04d-%02d-%02d %02d:%02d:%02.0f - %02d:%02d:%02.0f</i></b>",
-			sweepStartTime.year, sweepStartTime.month, sweepStartTime.day,
-			sweepStartTime.hour, sweepStartTime.minute, sweepStartTime.sec,
-			sweepFinishTime.hour, sweepFinishTime.minute, sweepFinishTime.sec);
+		getSweepStartAndEndTime(level2->sweep, &sweepStartTime, &sweepFinishTime);
+		gchar *date_str = formatSweepStartAndEndTimeForDisplay(&sweepStartTime, &sweepFinishTime);
 		gtk_label_set_markup(GTK_LABEL(level2->date_label), date_str);
 		g_free(date_str);
 	}
@@ -348,8 +436,16 @@ static gboolean _set_sweep_cb(gpointer _level2)
 	g_debug("AWeatherLevel2: _set_sweep_cb");
 	AWeatherLevel2 *level2 = _level2;
 	_load_sweep_gl(level2);
+	_updateSweepTimestampGui(level2);
 	grits_object_queue_draw(_level2);
 	g_object_unref(level2);
+
+	/* If the callback function pointer is set to a non-null value, then execute the callback function and clear out the pointer. */
+	if(level2->fAfterSetSweepCustomCallback != NULL){
+		level2->fAfterSetSweepCustomCallback();
+		level2->fAfterSetSweepCustomCallback = NULL;
+	}
+
 	return FALSE;
 }
 void aweather_level2_set_sweep(AWeatherLevel2 *level2,
@@ -377,12 +473,19 @@ void aweather_level2_set_sweep(AWeatherLevel2 *level2,
 		level2->sweep_colors = &level2->colormap[0];
 	}
 
-	/* Load data */
+	/* Load data on the UI thread as the OpenGL calls may not work in the background thread.
+	 * We use G_PRIORITY_HIGH_IDLE so that the sweep change can happen even if the user is interacting with the app (for example, moving the map).
+	 */
 	g_object_ref(level2);
-	g_idle_add(_set_sweep_cb, level2);
+	g_idle_add_full(G_PRIORITY_HIGH_IDLE, _set_sweep_cb, level2, NULL);
+
+	/* Store the selected volume and sweep id */
+	level2->iSelectedVolumeId = type;
+	level2->iSelectedSweepId = ipiSweepIndex;
+	level2->dSelectedElevation = level2->sweep->h.elev;
 }
 
-void aweather_level2_set_iso(AWeatherLevel2 *level2, gfloat level)
+void aweather_level2_set_iso(AWeatherLevel2 *level2, gfloat level, bool iplAsync)
 {
 	g_debug("AWeatherLevel2: set_iso - %f", level);
 
@@ -398,14 +501,30 @@ void aweather_level2_set_iso(AWeatherLevel2 *level2, gfloat level)
 				GRITS_OBJECT(vol), GRITS_LEVEL_WORLD+5, TRUE);
 		level2->volume = vol;
 	}
+
 	if (ISO_MIN < level && level < ISO_MAX) {
 		guint8 *data = colormap_get(&level2->colormap[0], level);
 		level2->volume->color[0] = data[0];
 		level2->volume->color[1] = data[1];
 		level2->volume->color[2] = data[2];
 		level2->volume->color[3] = data[3];
-		grits_volume_set_level(level2->volume, level);
-		grits_object_hide(GRITS_OBJECT(level2->volume), FALSE);
+		/* If we were asked to do this async, then run the normal method. If we were asked to do this synchronously, then run the 'sync' function. */
+		if(iplAsync)
+			grits_volume_set_level(level2->volume, level);
+		else
+			grits_volume_set_level_sync(level2->volume, level);
+
+		/* If the callback function pointer is set to a non-null value, then execute the callback function and clear out the pointer. */
+		if(level2->fOnSetIsoCustomCallback != NULL){
+			level2->fOnSetIsoCustomCallback();
+			level2->fOnSetIsoCustomCallback = NULL;
+		}
+
+		/* If this level2 object is currently hidden (for example, if we are animating and this frame is not needed),
+		 * then do not try to show the 3D radar isosurface.
+		 * Otherwise, show the isosurface.
+		 */
+		grits_object_hide(GRITS_OBJECT(level2->volume), GRITS_OBJECT(level2)->hidden);
 	} else {
 		grits_object_hide(GRITS_OBJECT(level2->volume), TRUE);
 	}
@@ -416,6 +535,8 @@ AWeatherLevel2 *aweather_level2_new(Radar *radar, AWeatherColormap *colormap)
 	g_debug("AWeatherLevel2: new - %s", radar->h.radar_name);
 	RSL_sort_radar(radar);
 	AWeatherLevel2 *level2 = g_object_new(AWEATHER_TYPE_LEVEL2, NULL);
+	level2->fAfterSetSweepCustomCallback = NULL; /* Ensure the callback function pointer is not pointing to anything */
+	level2->fOnSetIsoCustomCallback = NULL; /* Ensure the callback function pointer is not pointing to anything */
 	level2->radar    = radar;
 	level2->colormap = colormap;
 	aweather_level2_set_sweep(level2, DZ_INDEX, 0);
@@ -475,7 +596,7 @@ static void _on_iso_changed(GtkRange *range, gpointer _level2)
 {
 	AWeatherLevel2 *level2 = _level2;
 	gfloat level = gtk_range_get_value(range);
-	aweather_level2_set_iso(level2, level);
+	aweather_level2_set_iso(level2, level, true /* generate isosurface async */);
 }
 
 static gchar *_on_format_value(GtkScale *scale, gdouble value, gpointer _level2)
@@ -488,10 +609,9 @@ GtkWidget *aweather_level2_get_config(AWeatherLevel2 *level2)
 	Radar *radar = level2->radar;
 	g_debug("AWeatherLevel2: get_config - %p, %p", level2, radar);
 	/* Clear existing items */
-	gfloat elev;
-	guint rows = 1, cols = 1, cur_cols;
+	guint rows = 1, cols = 1;
 	gchar row_label_str[64], col_label_str[64], button_str[64];
-	GtkWidget *row_label, *col_label, *button = NULL, *elev_box = NULL;
+	GtkWidget *row_label, *col_label, *button = NULL;
 	GtkWidget *table = gtk_table_new(rows, cols, FALSE);
 
 	/* Add date */
@@ -506,65 +626,108 @@ GtkWidget *aweather_level2_get_config(AWeatherLevel2 *level2)
 	/* Copy over out pointer to the date label so we can update the text dynamically later */
 	level2->date_label = date_label;
 
-	/* Add sweeps */
+
+	/* Sort global elevation instances by elevation, then instance */
+	gint compare_elevation_instance(const void *a, const void *b) {
+		const SweepSelectionButtonInfo *ei_a = a;
+		const SweepSelectionButtonInfo *ei_b = b;
+
+		if (ei_a->elevation < ei_b->elevation) return -1;
+		if (ei_a->elevation > ei_b->elevation) return 1;
+		return (ei_a->instance < ei_b->instance) ? -1 : 1;
+	}
+
+	/* Step 1: Collect unique global (elevation, instance) pairs */
+	GList *global_elev_list = NULL;
+
+	rows = 1; // Start with row 1 for column headers
 	for (guint vi = 0; vi < radar->h.nvolumes; vi++) {
 		Volume *vol = radar->v[vi];
 		if (vol == NULL) continue;
-		rows++; cols = 1; elev = 0;
 
-		/* Row label */
+		rows++;
+
+		/* Add the row labels */
 		g_snprintf(row_label_str, 64, "<b>%s:</b>", vol->h.type_str);
 		row_label = gtk_label_new(row_label_str);
 		gtk_label_set_use_markup(GTK_LABEL(row_label), TRUE);
 		gtk_misc_set_alignment(GTK_MISC(row_label), 1, 0.5);
-		gtk_table_attach(GTK_TABLE(table), row_label,
-				0,1, rows-1,rows, GTK_FILL,GTK_FILL, 5,0);
+		gtk_table_attach(GTK_TABLE(table), row_label, 0, 1, rows - 1, rows, GTK_FILL, GTK_FILL, 5, 0);
+
+		GHashTable *local_elev_count = g_hash_table_new(g_double_hash, g_double_equal);
+
 
 		for (guint si = 0; si < vol->h.nsweeps; si++) {
 			Sweep *sweep = vol->sweep[si];
 			if (sweep == NULL || sweep->h.elev == 0) continue;
-			if (sweep->h.elev != elev) {
-				cols++;
-				elev = sweep->h.elev;
 
-				/* Column label */
-				g_object_get(table, "n-columns", &cur_cols, NULL);
-				if (cols >  cur_cols) {
-					g_snprintf(col_label_str, 64, "<b>%.2f°</b>", elev);
-					col_label = gtk_label_new(col_label_str);
-					gtk_label_set_use_markup(GTK_LABEL(col_label), TRUE);
-					gtk_widget_set_size_request(col_label, 50, -1);
-					gtk_table_attach(GTK_TABLE(table), col_label,
-							cols-1,cols, 0,1, GTK_FILL,GTK_FILL, 0,0);
-				}
+			/* Count sweeps at this elevation in the current volume */
+			guint instance = GPOINTER_TO_INT(g_hash_table_lookup(local_elev_count, &sweep->h.elev)) + 1;
+			g_debug("level2.c aweather_level2_get_config: Found sweep. Will put in row: %i, elevation: %f, instance: %i", rows, sweep->h.elev, instance);
+			g_hash_table_insert(local_elev_count, &sweep->h.elev, GUINT_TO_POINTER(instance));
 
-				elev_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
-				gtk_box_set_homogeneous(GTK_BOX(elev_box), TRUE);
-				gtk_table_attach(GTK_TABLE(table), elev_box,
-						cols-1,cols, rows-1,rows, GTK_FILL,GTK_FILL, 0,0);
-			}
-
-
-			/* Button */
-			g_snprintf(button_str, 64, "%3.2f", elev);
-			button = gtk_radio_button_new_with_label_from_widget(
-					GTK_RADIO_BUTTON(button), button_str);
+			/* Create the sweep selection button that we will later place in the UI table */
+			g_snprintf(button_str, 64, "%3.2f", sweep->h.elev);
+			button = gtk_radio_button_new_with_label_from_widget(GTK_RADIO_BUTTON(button), button_str);
 			gtk_widget_set_size_request(button, -1, 26);
-			//button = gtk_radio_button_new_from_widget(GTK_RADIO_BUTTON(button));
-			//gtk_widget_set_size_request(button, -1, 22);
 			g_object_set(button, "draw-indicator", FALSE, NULL);
-			gtk_box_pack_end(GTK_BOX(elev_box), button, TRUE, TRUE, 0);
-
 			g_object_set_data(G_OBJECT(button), "level2", level2);
 			g_object_set_data(G_OBJECT(button), "type", (gpointer)(guintptr)vi);
-			g_object_set_data(G_OBJECT(button), "elev", (gpointer)(guintptr)(elev*100));
-			/* Save off the index of this sweep so we can access it later.
-			 *  Sometimes there are two sweeps at the same elevation, making it impossible to tell which one the user wants to view.
-			 */
+			g_object_set_data(G_OBJECT(button), "elev", (gpointer)(guintptr)(sweep->h.elev * 100));
 			g_object_set_data(G_OBJECT(button), "sweepIndex", (gpointer)(guintptr)si);
 			g_signal_connect(button, "clicked", G_CALLBACK(_on_sweep_clicked), level2);
+
+			/* Add unique (elevation, instance) globally */
+			SweepSelectionButtonInfo *ei = g_malloc(sizeof(SweepSelectionButtonInfo));
+			ei->elevation = sweep->h.elev;
+			ei->instance = instance;
+			ei->iRowIndex = rows;
+			ei->objSweepSelectionButton = button;
+			global_elev_list = g_list_append(global_elev_list, ei);
 		}
+
+		g_hash_table_destroy(local_elev_count);
 	}
+
+	/* Sort the full list of all buttons by elevation, then instance so that we can align elevations and instances vertically as columns. */
+	global_elev_list = g_list_sort(global_elev_list, (GCompareFunc)compare_elevation_instance);
+
+	/* Step 2: Populate the table with the buttons we generated above. */
+	double dCurrentElevation = 0;
+	guint iCurrentInstance = 0;
+	int iCurrentColumn = 1; /* Start at column 1 to stay to the right of the row headers */
+	for (GList *node = global_elev_list; node; node = node->next) {
+		SweepSelectionButtonInfo *ei = (SweepSelectionButtonInfo*)node->data;
+		/* If we need a new column (hit a new elevation or instance of that duplicate elevation), then create a new column */
+		if(ei->elevation != dCurrentElevation
+			|| ei->instance != iCurrentInstance
+		){
+			++iCurrentColumn;
+			dCurrentElevation = ei->elevation;
+			iCurrentInstance = ei->instance;
+
+			/* Add a header label for this new column */
+			g_snprintf(col_label_str, 64, "<b>%.2f°</b>", ei->elevation);
+			col_label = gtk_label_new(col_label_str);
+			gtk_label_set_use_markup(GTK_LABEL(col_label), TRUE);
+			gtk_widget_set_size_request(col_label, 50, -1);
+			gtk_table_attach(GTK_TABLE(table), col_label, iCurrentColumn, iCurrentColumn + 1, 0, 1, GTK_FILL, GTK_FILL, 0, 0);
+		}
+
+		g_debug("level2.c aweather_level2_get_config: Adding button for elevation %f, instance: %i, row: %i, col: %i", ei->elevation, ei->instance, ei->iRowIndex, iCurrentColumn);
+
+		/* Add the sweep selection button to the UI table */
+		gtk_table_attach(
+			GTK_TABLE(table),
+			ei->objSweepSelectionButton,
+			iCurrentColumn, iCurrentColumn + 1,
+			ei->iRowIndex - 1, ei->iRowIndex,
+			GTK_FILL, GTK_FILL, 0, 0
+		); /* gtk_table_attach */
+	} /* for (GList *node = global_elev_list; node; node = node->next) { */
+
+	/* Cleanup buttons list */
+	g_list_free_full(global_elev_list, g_free);
 
 	/* Add Iso-surface volume */
 	g_object_get(table, "n-columns", &cols, NULL);

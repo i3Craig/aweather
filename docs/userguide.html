@@ -1,9 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN"
     "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
-<meta name="generator" content="AsciiDoc 8.6.5" />
+<meta name="generator" content="AsciiDoc 10.2.1" />
 <title>AWeather Users Guide</title>
 <style type="text/css">
 /* Shared CSS for AsciiDoc xhtml11 and html5 backends */
@@ -87,9 +88,15 @@ ul, ol, li > p {
 ul > li     { color: #aaa; }
 ul > li > * { color: black; }
 
-pre {
+.monospaced, code, pre {
+  font-family: "Courier New", Courier, monospace;
+  font-size: inherit;
+  color: navy;
   padding: 0;
   margin: 0;
+}
+pre {
+  white-space: pre-wrap;
 }
 
 #author {
@@ -179,7 +186,7 @@ div.quoteblock, div.verseblock {
   margin-left: 1.0em;
   margin-right: 10%;
   border-left: 5px solid #f0f0f0;
-  color: #777777;
+  color: #888;
 }
 
 div.quoteblock > div.attribution {
@@ -219,7 +226,7 @@ div.exampleblock > div.content {
 }
 
 div.imageblock div.content { padding-left: 0; }
-span.image img { border-style: none; }
+span.image img { border-style: none; vertical-align: text-bottom; }
 a.image:visited { color: white; }
 
 dl {
@@ -349,7 +356,7 @@ div.colist td img {
   margin-bottom: 0.1em;
 }
 
-div.toclevel1, div.toclevel2, div.toclevel3, div.toclevel4 {
+div.toclevel0, div.toclevel1, div.toclevel2, div.toclevel3, div.toclevel4 {
   margin-top: 0;
   margin-bottom: 0;
 }
@@ -407,17 +414,13 @@ span.underline { text-decoration: underline; }
 span.overline { text-decoration: overline; }
 span.line-through { text-decoration: line-through; }
 
+div.unbreakable { page-break-inside: avoid; }
+
 
 /*
  * xhtml11 specific
  *
  * */
-
-tt {
-  font-family: monospace;
-  font-size: inherit;
-  color: navy;
-}
 
 div.tableblock {
   margin-top: 1.0em;
@@ -433,7 +436,7 @@ thead, p.table.header {
 p.table {
   margin-top: 0;
 }
-/* Because the table frame attribute is overriden by CSS in most browsers. */
+/* Because the table frame attribute is overridden by CSS in most browsers. */
 div.tableblock > table[frame="void"] {
   border-style: none;
 }
@@ -451,12 +454,6 @@ div.tableblock > table[frame="vsides"] {
  * html5 specific
  *
  * */
-
-.monospaced {
-  font-family: monospace;
-  font-size: inherit;
-  color: navy;
-}
 
 table.tableblock {
   margin-top: 1.0em;
@@ -514,6 +511,31 @@ th.tableblock.valign-middle, td.tableblock.valign-middle {
 th.tableblock.valign-bottom, td.tableblock.valign-bottom {
   vertical-align: bottom;
 }
+
+
+/*
+ * manpage specific
+ *
+ * */
+
+body.manpage h1 {
+  padding-top: 0.5em;
+  padding-bottom: 0.5em;
+  border-top: 2px solid silver;
+  border-bottom: 2px solid silver;
+}
+body.manpage h2 {
+  border-style: none;
+}
+body.manpage div.sectionbody {
+  margin-left: 3em;
+}
+
+@media print {
+  body.manpage div#toc { display: none; }
+}
+
+
 </style>
 <script type="text/javascript">
 /*<![CDATA[*/
@@ -558,7 +580,7 @@ toc: function (toclevels) {
 
   function tocEntries(el, toclevels) {
     var result = new Array;
-    var re = new RegExp('[hH]([2-'+(toclevels+1)+'])');
+    var re = new RegExp('[hH]([1-'+(toclevels+1)+'])');
     // Function that scans the DOM tree for header elements (the DOM2
     // nodeIterator API would be a better technique but not supported by all
     // browsers).
@@ -587,7 +609,7 @@ toc: function (toclevels) {
   var i;
   for (i = 0; i < toc.childNodes.length; i++) {
     var entry = toc.childNodes[i];
-    if (entry.nodeName == 'DIV'
+    if (entry.nodeName.toLowerCase() == 'div'
      && entry.getAttribute("class")
      && entry.getAttribute("class").match(/^toclevel/))
       tocEntriesToRemove.push(entry);
@@ -633,7 +655,7 @@ footnotes: function () {
   var entriesToRemove = [];
   for (i = 0; i < noteholder.childNodes.length; i++) {
     var entry = noteholder.childNodes[i];
-    if (entry.nodeName == 'DIV' && entry.getAttribute("class") == "footnote")
+    if (entry.nodeName.toLowerCase() == 'div' && entry.getAttribute("class") == "footnote")
       entriesToRemove.push(entry);
   }
   for (i = 0; i < entriesToRemove.length; i++) {
@@ -714,9 +736,9 @@ asciidoc.install();
 <div id="header">
 <h1>AWeather Users Guide</h1>
 <span id="author">Jason Holmes</span><br />
-<span id="email"><tt>&lt;<a href="mailto:&lt;Doppler5@aol.com&gt;">&lt;Doppler5@aol.com&gt;</a>&gt;</tt></span><br />
-<span id="revnumber">version 0.8,</span>
-<span id="revdate">2013-01-28</span>
+<span id="email"><code>&lt;<a href="mailto:&lt;Doppler5@aol.com&gt;">&lt;Doppler5@aol.com&gt;</a>&gt;</code></span><br />
+<span id="revnumber">version 0.9,</span>
+<span id="revdate">2025-01-19</span>
 </div>
 <div id="content">
 <div class="sect1">
@@ -795,18 +817,27 @@ Correlation Coefficient (A statistical correlation between the reflected
   horizontal and vertical power returns) <span class="footnote" id="_footnote_dualpol"><br />[Only available at   WSR-88D sites that have been upgraded to support dual-polarization]<br /></span>
 </p>
 </li>
+<li>
+<p>
+Clutter Filter Power removed (CFP)
+</p>
+</li>
 </ul></div>
 <div class="paragraph"><p>Level II data has been available through private weather data vendors for some
-time but recently has been generously provided by some universities.</p></div>
+time but recently has been generously provided by the
+NOAA Operational Model Archive and Distribution System (NOMADS).</p></div>
 <div class="paragraph"><p>AWeather requires an active internet connection along with a data source in
 order to retrieve, decode and display current or recent radar data.</p></div>
-<div class="paragraph"><p>The default radar feed is publically accessible thanks to Iowa State University
-and is located at: <a href="http://mesonet.agron.iastate.edu/data/nexrd2/raw/">http://mesonet.agron.iastate.edu/data/nexrd2/raw/</a>.</p></div>
+<div class="paragraph"><p>The default radar feed is publically accessible thanks to NOMADS
+and is located at: <a href="https://nomads.ncep.noaa.gov/pub/data/nccf/radar/nexrad_level2/">https://nomads.ncep.noaa.gov/pub/data/nccf/radar/nexrad_level2/</a>.</p></div>
 <div class="paragraph"><p>AWeather also displays some severe weather alerts provided by the NOAA weather
 alerts <a href="http://alerts.weather.gov/">feed</a>.</p></div>
 <div class="paragraph"><p>When run under Linux, AWeather can interface with the
 <a href="http://www.catb.org/gpsd/">GPSd</a> location services to track and display the
 user&#8217;s current location.</p></div>
+<div class="paragraph"><p>The contintal US radar overlay (displayed when no NEXRAD site is selected) is
+provided by the Northern Illinois University at the URL:
+<a href="https://atlas.niu.edu/analysis/radar/CONUS/archive_b/">https://atlas.niu.edu/analysis/radar/CONUS/archive_b/</a>.</p></div>
 </div>
 </div>
 <div class="sect1">
@@ -932,6 +963,45 @@ allows the user to select a different server to
 </tr>
 <tr>
 <td class="hdlist1">
+Animation Frames
+<br />
+</td>
+<td class="hdlist2">
+<p style="margin-top: 0;">
+allows the user to choose how many NEXRAD
+                                         Level 2 files are loaded for animating.
+</p>
+</td>
+</tr>
+<tr>
+<td class="hdlist1">
+Animation Frame Interval (ms)
+<br />
+</td>
+<td class="hdlist2">
+<p style="margin-top: 0;">
+allows the user to choose how
+                                         long each NEXRAD Level 2 frame is displayed on
+                                         the screen for while animating.
+</p>
+</td>
+</tr>
+<tr>
+<td class="hdlist1">
+Animation End Frame Hold (ms)
+<br />
+</td>
+<td class="hdlist2">
+<p style="margin-top: 0;">
+allows the user to specify how long
+                                         the last frame of the animation is displayed
+                                         for in addition to the normal animation frame
+                                         interval time.
+</p>
+</td>
+</tr>
+<tr>
+<td class="hdlist1">
 Debug level text box
 <br />
 </td>
@@ -963,12 +1033,24 @@ allows the user to toggle the weather alerts
 </tr>
 <tr>
 <td class="hdlist1">
+borders checkbox
+<br />
+</td>
+<td class="hdlist2">
+<p style="margin-top: 0;">
+allows the user to toggle state borders
+</p>
+</td>
+</tr>
+<tr>
+<td class="hdlist1">
 elev checkbox
 <br />
 </td>
 <td class="hdlist2">
 <p style="margin-top: 0;">
 allows the user to toggle terrain rendering
+                                         (No longer functional)
 </p>
 </td>
 </tr>
@@ -1026,6 +1108,7 @@ sat checkbox
 <td class="hdlist2">
 <p style="margin-top: 0;">
 allows the user to toggle satellite ground images
+                                         (No longer functional)
 </p>
 </td>
 </tr>
@@ -1223,7 +1306,7 @@ The time button, which reveals a list of each hour when clicked
 <div class="ulist"><ul>
 <li>
 <p>
-Clicking on an hour will reveal a list of times in 5 minute intervals that
+Clicking on an hour will reveal a list of times in 1 minute intervals that
    the user can select to load radar data from <span class="footnote"><br />[Radar data can only be
    loaded if it has been previously cached or is from a recent enough date and
    can still be obtained from the NEXRAD server]<br /></span>
@@ -1248,7 +1331,25 @@ nearby radar sites.</p></div>
 will be displayed at the bottom of the program.</p></div>
 <div class="paragraph"><p>All active radar sites will show as tabs while site&#8217;s available tilt and product
 data will display to the right of the tab.</p></div>
-<div class="paragraph"><p>Simply click on a button to display that product/tilt in the map window.</p></div>
+<div class="paragraph"><p>Simply click on a button to display that product/tilt in the map window.
+The time the radar site started and finished collecting data for the selected
+Product is shown to the left of the product selection grid.</p></div>
+<div class="paragraph"><p>Above this time is the "Animate" button. Select this button to put the radar
+at the selected site into motion. While the animatin is running, the user
+can select any product / elevation from the selection grid or change the
+isosurface slider to change the product shown in the animation.</p></div>
+<div class="paragraph"><p>While the animation is running, a toggle button shows up for each NEXRAD
+Level 2 file that was downloaded, to the right of the animate button.
+Click these buttons to toggle them. When the button is toggled on (crossed off),
+the frame will be skipped in the animation.
+Use the left arrow button (keyboard shortcut = ,) or right arrow button
+(keyboard shortcut = .) to manually move through the animation.
+Use the play button to resume the animation (keybaord shortcut = /).</p></div>
+<div class="paragraph"><p>Note that some sites provide multiple sweeps at the same elevation for the same product
+at different times in the same NEXRAD Level 2 file. If this is the case for the selected
+product / elevation, the application will automatically show those sweeps in chronological
+order as the animation is running. When this happens, the current frame count shown
+in the frame selection toggle buttons will increase beyond 1.</p></div>
 <div class="paragraph"><p>An isosurface slider is shown below the product/tilt buttons.  Slide the
 selector to reveal the rendered isosurface structure of reflectivity data.</p></div>
 <div class="paragraph"><p>A color scale will automatically appear at the top left corner of the map window
@@ -1493,6 +1594,39 @@ Refresh the display
 </p>
 </td>
 </tr>
+<tr>
+<td class="hdlist1">
+,
+<br />
+</td>
+<td class="hdlist2">
+<p style="margin-top: 0;">
+When animating, jump to the previous frame (comma)
+</p>
+</td>
+</tr>
+<tr>
+<td class="hdlist1">
+.
+<br />
+</td>
+<td class="hdlist2">
+<p style="margin-top: 0;">
+When animating, jump to the next frame (period)
+</p>
+</td>
+</tr>
+<tr>
+<td class="hdlist1">
+/
+<br />
+</td>
+<td class="hdlist2">
+<p style="margin-top: 0;">
+When animating, pause or play the animatin (slash)
+</p>
+</td>
+</tr>
 </table></div>
 </dd>
 </dl></div>
@@ -1596,17 +1730,17 @@ Additional data sources for surface data, etc
 </li>
 <li>
 <p>
-Animation support
-</p>
-</li>
-<li>
-<p>
 API for radar algorithms
 </p>
 </li>
 <li>
 <p>
 Additional features
+</p>
+</li>
+<li>
+<p>
+Porting to GTK3 (currently using GTK2)
 </p>
 </li>
 </ul></div>
@@ -1616,8 +1750,9 @@ Additional features
 <div id="footnotes"><hr /></div>
 <div id="footer">
 <div id="footer-text">
-Version 0.8<br />
-Last updated 2013-01-28 01:44:08 UTC
+Version 0.9<br />
+Last updated
+ 2025-01-19 20:55:43 UTC
 </div>
 </div>
 </body>

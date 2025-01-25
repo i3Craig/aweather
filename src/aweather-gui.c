@@ -386,6 +386,29 @@ G_MODULE_EXPORT int on_log_level_changed(GtkSpinButton *spinner, AWeatherGui *se
 	return TRUE;
 }
 
+G_MODULE_EXPORT int on_animation_frames_changed(GtkSpinButton *spinner, AWeatherGui *self)
+{
+	gint value = gtk_spin_button_get_value_as_int(spinner);
+	g_debug("AWeatherGui: on_animation_frames_changed - %p, animation_frames=%d", self, value);
+	grits_prefs_set_integer(self->prefs, "aweather/animation_frames", value);
+	return TRUE;
+}
+
+G_MODULE_EXPORT int on_animation_frame_interval_ms_changed(GtkSpinButton *spinner, AWeatherGui *self)
+{
+	gint value = gtk_spin_button_get_value_as_int(spinner);
+	g_debug("AWeatherGui: on_animation_frame_interval_ms_changed - %p, animation_frame_interval_ms=%d", self, value);
+	grits_prefs_set_integer(self->prefs, "aweather/animation_frame_interval_ms", value);
+	return TRUE;
+}
+
+G_MODULE_EXPORT int on_animation_end_frame_hold_ms_changed(GtkSpinButton *spinner, AWeatherGui *self)
+{
+	gint value = gtk_spin_button_get_value_as_int(spinner);
+	g_debug("AWeatherGui: on_animation_end_frame_hold_ms_changed - %p, animation_end_frame_hold_ms=%d", self, value);
+	grits_prefs_set_integer(self->prefs, "aweather/animation_end_frame_hold_ms", value);
+	return TRUE;
+}
 
 /*****************
  * Setup helpers *
@@ -449,14 +472,23 @@ static void prefs_setup(AWeatherGui *self)
 	gint   uf = grits_prefs_get_integer(self->prefs, "aweather/update_freq",  NULL);
 	gchar *nu = grits_prefs_get_string (self->prefs, "aweather/nexrad_url",   NULL);
 	gint   ll = grits_prefs_get_integer(self->prefs, "aweather/log_level",    NULL);
+	gint   af = grits_prefs_get_integer(self->prefs, "aweather/animation_frames", NULL);
+	gint   ai = grits_prefs_get_integer(self->prefs, "aweather/animation_frame_interval_ms", NULL);
+	gint   ae = grits_prefs_get_integer(self->prefs, "aweather/animation_end_frame_hold_ms", NULL);
 	gchar *is = grits_prefs_get_string (self->prefs, "aweather/initial_site", NULL);
 	GtkWidget *ufw = aweather_gui_get_widget(self, "prefs_general_freq");
 	GtkWidget *nuw = aweather_gui_get_widget(self, "prefs_general_url");
 	GtkWidget *llw = aweather_gui_get_widget(self, "prefs_general_log");
+	GtkWidget *afw = aweather_gui_get_widget(self, "prefs_general_animation_frames");
+	GtkWidget *aiw = aweather_gui_get_widget(self, "prefs_general_animation_frame_interval_ms");
+	GtkWidget *aew = aweather_gui_get_widget(self, "prefs_general_animation_end_frame_hold_ms");
 	GtkWidget *isw = aweather_gui_get_widget(self, "prefs_general_site");
 	if (uf) gtk_spin_button_set_value(GTK_SPIN_BUTTON(ufw), uf);
 	if (nu) gtk_entry_set_text(GTK_ENTRY(nuw), nu), g_free(nu);
 	if (ll) gtk_spin_button_set_value(GTK_SPIN_BUTTON(llw), ll);
+	if (af) gtk_spin_button_set_value(GTK_SPIN_BUTTON(afw), af);
+	if (ai) gtk_spin_button_set_value(GTK_SPIN_BUTTON(aiw), ai);
+	if (ae) gtk_spin_button_set_value(GTK_SPIN_BUTTON(aew), ae);
 	if (is) {
 		GtkTreeModel *model = gtk_combo_box_get_model(GTK_COMBO_BOX(isw));
 		GtkTreeIter iter;

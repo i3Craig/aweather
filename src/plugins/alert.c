@@ -63,7 +63,7 @@ typedef struct {
 		char      *severity;  // Minor
 		char      *certainty; // Likely
 		char      *area_desc; // Northeastern Brooks Range; Northwestern Brooks Range
-		char      *fips6;     // 006015 006023 006045 006105
+		GList     *objFips6List; // List of FIPS6 county codes. Example: [006015, 006023, 00604,5 006105]
 		AlertVtec *vtec;      // /X.CON.PAFG.WW.Y.0064.000000T0000Z-101220T0300Z/
 	} cap;
 
@@ -165,7 +165,7 @@ void msg_parse_index_end(GMarkupParseContext *context, const gchar *name,
 
 	if (g_str_equal(name, "value") && data->value_name) {
 		/* FIPS6 appears to have been renamed to SAME in the API. We now search for "SAME" instead of "FIPS6", but the struct field name remains. */
-		if (g_str_equal(data->value_name, "SAME")) msg->cap.fips6 = g_strdup(text);
+		if (g_str_equal(data->value_name, "SAME"))  msg->cap.objFips6List = g_list_append(msg->cap.objFips6List, g_strdup(text));
 		if (g_str_equal(data->value_name, "VTEC"))  msg->cap.vtec  = msg_parse_vtec(text);
 	}
 }
@@ -240,7 +240,7 @@ void msg_free(AlertMsg *msg)
 	g_free(msg->cap.severity);
 	g_free(msg->cap.certainty);
 	g_free(msg->cap.area_desc);
-	g_free(msg->cap.fips6);
+	g_list_free_full(msg->cap.objFips6List, g_free);
 	g_free(msg->cap.vtec);
 	g_free(msg->description);
 	g_free(msg->instruction);
@@ -250,6 +250,10 @@ void msg_free(AlertMsg *msg)
 
 void msg_print(GList *msgs)
 {
+	void fPrintFips(gpointer ipobjData, gpointer ipobjNull){
+		g_message(" cat.fips6     = %s", (char*)ipobjData);
+	}
+
 	g_message("msg_print");
 	for (GList *cur = msgs; cur; cur = cur->next) {
 		AlertMsg *msg = cur->data;
@@ -264,7 +268,7 @@ void msg_print(GList *msgs)
 		g_message("	cat.severity  = %s",  msg->cap.severity );
 		g_message("	cat.certainty = %s",  msg->cap.certainty);
 		g_message("	cat.area_desc = %s",  msg->cap.area_desc);
-		g_message("	cat.fips6     = %s",  msg->cap.fips6    );
+		g_list_foreach(msg->cap.objFips6List, fPrintFips, NULL);
 		g_message("	cat.vtec      = %p",  msg->cap.vtec     );
 	}
 }
@@ -609,20 +613,18 @@ static GritsPoly *_load_storm_based(GritsPluginAlert *alert, AlertMsg *msg)
 static GritsPoly *_load_county_based(GritsPluginAlert *alert, AlertMsg *msg)
 {
 	/* Locate counties in the path of the storm */
-	gchar **fipses  = g_strsplit(msg->cap.fips6, " ", -1);
 	GList *counties = NULL;
-	if(fipses == NULL){
+	if(msg->cap.objFips6List == NULL){
 		g_debug("alert.c:_load_county_based failed. Unable to parse FIPS6 codes for alert message '%s'.", msg->title);
 		return NULL;
 	}
-	for (int i = 0; fipses[i]; i++) {
-		glong fips = g_ascii_strtoll(fipses[i], NULL, 10);
+	for(GList* objNode = msg->cap.objFips6List; objNode; objNode = objNode->next){
+		glong fips = g_ascii_strtoll((gchar*)objNode->data, NULL, 10);
 		GritsPoly *county = g_tree_lookup(alert->counties, (gpointer)fips);
 		if (!county)
 			continue;
 		counties = g_list_prepend(counties, county);
 	}
-	g_strfreev(fipses);
 
 	/* No county based warning.. */
 	if (!counties)

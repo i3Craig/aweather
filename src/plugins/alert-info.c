@@ -100,6 +100,7 @@ AlertInfo alert_info[] = {
 	{"Tsunami Advisory"               , "advisory", "Tsunami",    42  , 0, 0, 0, {210, 105, 30 }},  // chocolate
 	{"Wind Advisory"                  , "advisory", "Wind",       66  , 0, 0, 0, {210, 180, 140}},  // tan
 	{"Wind Chill Advisory"            , "advisory", "Wind Chill", 55  , 0, 0, 0, {175, 238, 238}},  // paleturquoise
+	{"Cold Weather Advisory"          , "advisory", "Cold",       55  , 0, 0, 0, {70,  130, 180}},  // steelblue
 	{"Winter Weather Advisory"        , "advisory", "Winter Wx",  53  , 0, 0, 0, {123, 104, 238}},  // mediumslateblue
 	{"Lake Effect Snow and Blowing Snow Advisory"
 	                                  , "advisory", "L/S Snow",   54  , 0, 0, 0, {72 , 209, 204}},  // mediumturquoise

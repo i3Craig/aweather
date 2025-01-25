@@ -19,6 +19,11 @@ Nonfunctional plugins:
 Installation
 - Arch Linux: Available in the AUR (https://aur.archlinux.org/packages/aweather-git)
 
+Changes made from pileus.org version:
+- Added vector based dark map mode. State and county borders are drawn, but no requests are made to Open Street Maps. This mode is the default.
+- Added animation support for NEXRAD Level2 radar, including 3D isosurfaces.
+- Fixed many bugs that caused the application to crash.
+
 Original data sources for elevation and satellite imagery:
 Ground    (WMS) - http://www.nasa.network.com/wms
 Elevation (WMS) - http://www.nasa.network.com/elev
