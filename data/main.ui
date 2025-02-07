@@ -32,6 +32,10 @@
     <property name="stock_id">gtk-disconnect</property>
     <signal name="toggled" handler="on_offline" swapped="no"/>
   </object>
+  <object class="GtkToggleAction" id="RSL_wsr88d_merge_split_cuts_off">
+    <property name="label">_NEXRAD Show All Sweeps</property>
+    <signal name="toggled" handler="on_RSL_wsr88d_merge_split_cuts_off_changed" swapped="no"/>
+  </object>
   <object class="GtkAction" id="prefs">
     <property name="label" translatable="yes">_Preferences</property>
     <property name="stock_id">gtk-preferences</property>
@@ -1089,6 +1093,28 @@ The hypothetical commands `show w' and `show c' should show the appropriate part
                             </child>
 
 
+
+			    <!-- Show SAILS sweeps toggle button -->
+                            <child>
+                              <object class="GtkCheckButton" id="prefs_general_RSL_wsr88d_merge_split_cuts_off">
+                                <property name="related_action">RSL_wsr88d_merge_split_cuts_off</property>
+                                <property name="visible">True</property>
+                                <property name="can_focus">True</property>
+                                <property name="receives_default">False</property>
+                                <property name="draw_indicator">True</property>
+                                <property name="tooltip_text" translatable="yes">This functions to keep reflectivity from all velocity sweeps in the split cut. Disabling this option will keep reflectivity data from the surveillance sweep only. Check this box to see more reflectivity sweep options available, but keep in mind that the extra sweeps may be of lower quality.</property>
+                              </object>
+                              <packing>
+                                <property name="expand">True</property>
+                                <property name="fill">True</property>
+                                <property name="position">4</property>
+                              </packing>
+                            </child>
+
+
+
+
+
 			    <!-- Number of frames in the animation setting -->
                             <child>
                               <object class="GtkHBox" id="prefs_general_animation_frames_0">
@@ -1131,7 +1157,7 @@ The hypothetical commands `show w' and `show c' should show the appropriate part
                               <packing>
                                 <property name="expand">True</property>
                                 <property name="fill">True</property>
-                                <property name="position">4</property>
+                                <property name="position">5</property>
                               </packing>
                             </child>
 
@@ -1178,7 +1204,7 @@ The hypothetical commands `show w' and `show c' should show the appropriate part
                               <packing>
                                 <property name="expand">True</property>
                                 <property name="fill">True</property>
-                                <property name="position">5</property>
+                                <property name="position">6</property>
                               </packing>
                             </child>
 
@@ -1225,7 +1251,7 @@ The hypothetical commands `show w' and `show c' should show the appropriate part
                               <packing>
                                 <property name="expand">True</property>
                                 <property name="fill">True</property>
-                                <property name="position">6</property>
+                                <property name="position">7</property>
                               </packing>
                             </child>
 
@@ -1271,7 +1297,7 @@ The hypothetical commands `show w' and `show c' should show the appropriate part
                               <packing>
                                 <property name="expand">True</property>
                                 <property name="fill">True</property>
-                                <property name="position">7</property>
+                                <property name="position">8</property>
                               </packing>
                             </child>
                           </object>

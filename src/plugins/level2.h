@@ -29,6 +29,10 @@
 #define AWEATHER_IS_LEVEL2_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE   ((klass), AWEATHER_TYPE_LEVEL2))
 #define AWEATHER_LEVEL2_GET_CLASS(obj)  (G_TYPE_INSTANCE_GET_CLASS ((obj),   AWEATHER_TYPE_LEVEL2, AWeatherLevel2Class))
 
+/* These constants are stored in iSelectedSweepId and iSelectedVolumeId, respectively before the user selects a sweep / volume */
+#define AWEATHER_LEVEL2_SELECTED_SWEEP_ID_NONE -1
+#define AWEATHER_LEVEL2_SELECTED_VOLUME_ID_NONE -1
+
 typedef struct _AWeatherLevel2      AWeatherLevel2;
 typedef struct _AWeatherLevel2Class AWeatherLevel2Class;
 
@@ -81,7 +85,7 @@ GType aweather_level2_get_type(void);
 AWeatherLevel2 *aweather_level2_new(Radar *radar, AWeatherColormap *colormap);
 
 AWeatherLevel2 *aweather_level2_new_from_file(const gchar *file, const gchar *site,
-		AWeatherColormap *colormap);
+		AWeatherColormap *colormap, GritsPrefs *prefs);
 
 void aweather_level2_set_sweep(AWeatherLevel2 *level2,
 		int type, int ipiSweepIndex);
@@ -91,7 +95,7 @@ void aweather_level2_set_sweep(AWeatherLevel2 *level2,
  */
 void aweather_level2_set_iso(AWeatherLevel2 *level2, gfloat level, bool iplAsync);
 
-GtkWidget *aweather_level2_get_config(AWeatherLevel2 *level2);
+GtkWidget *aweather_level2_get_config(AWeatherLevel2 *level2, GritsPrefs *prefs);
 
 
 /* Copies the date and time info from the ray header passed in into the given RSL date time struct */ 

@@ -34,7 +34,13 @@
 /* Structure to store additional data associated with a sweep selection button, allowing us to align the buttons in a grid based on elevation and volume. */
 typedef struct {
 	double elevation; /* stores the elevation that this button will select */
-	guint instance; /* Stores an ID that makes this elevation unique. That is, if there is more than one sweep in the same volume at the same elevation, this will be set to a number > 1 */
+
+	/* Stores an ID that makes this elevation unique.
+	 * That is, if there is more than one sweep in the same volume at the same elevation, this will be set to a number > 1.
+	 * However, if we are in "show all sweeps" mode,
+	 * this stores the start time of the sweep so that columns are arranged by the time the sweep was captured.
+	 */
+	time_t instance;
 	int iRowIndex; /* Stores the row that this button will go into */
 	GtkWidget* objSweepSelectionButton; /* Stores the button that will be put in the UI sweep selection table */
 } SweepSelectionButtonInfo;
@@ -492,6 +498,10 @@ void aweather_level2_set_iso(AWeatherLevel2 *level2, gfloat level, bool iplAsync
 	if (!level2->volume) {
 		g_debug("AWeatherLevel2: set_iso - creating new volume");
 		Volume      *rvol = RSL_get_volume(level2->radar, DZ_INDEX);
+		if(rvol == NULL){
+			g_debug("aweather_level2_set_iso: This NEXRAD Level 2 file contains no volume and no sweeps. We are unable to set the iso. Giving up now.");
+			return;
+		}
 		VolGrid     *grid = _load_grid(rvol);
 		GritsVolume *vol  = grits_volume_new(grid);
 		vol->proj = GRITS_VOLUME_CARTESIAN;
@@ -539,6 +549,11 @@ AWeatherLevel2 *aweather_level2_new(Radar *radar, AWeatherColormap *colormap)
 	level2->fOnSetIsoCustomCallback = NULL; /* Ensure the callback function pointer is not pointing to anything */
 	level2->radar    = radar;
 	level2->colormap = colormap;
+
+	/* Default to no sweep / volume selected yet */
+	level2->iSelectedSweepId = AWEATHER_LEVEL2_SELECTED_SWEEP_ID_NONE;
+	level2->iSelectedVolumeId = AWEATHER_LEVEL2_SELECTED_VOLUME_ID_NONE;
+
 	aweather_level2_set_sweep(level2, DZ_INDEX, 0);
 
 	GritsPoint center;
@@ -551,7 +566,7 @@ AWeatherLevel2 *aweather_level2_new(Radar *radar, AWeatherColormap *colormap)
 }
 
 AWeatherLevel2 *aweather_level2_new_from_file(const gchar *file, const gchar *site,
-		AWeatherColormap *colormap)
+		AWeatherColormap *colormap, GritsPrefs *prefs)
 {
 	g_debug("AWeatherLevel2: new_from_file %s %s", site, file);
 
@@ -572,6 +587,18 @@ AWeatherLevel2 *aweather_level2_new_from_file(const gchar *file, const gchar *si
 	/* Load the radar file */
 	RSL_read_these_sweeps("all", NULL);
 	g_debug("AWeatherLevel2: rsl read start");
+
+	/* If the user wants to show the reflectivity data from the velocity sweeps, then disable the "merge split cuts" option in RSL so those
+	 * sweeps are not removed.
+	 * Enabling this option (setting it to true) will cause extra reflectivity sweeps to show up,
+	 * which can be useful when looking for closer to real-time data.
+	 */
+	if(grits_prefs_get_boolean(prefs, "aweather/RSL_wsr88d_merge_split_cuts_off", NULL)){
+		RSL_wsr88d_merge_split_cuts_off();
+	} else {
+		RSL_wsr88d_merge_split_cuts_on();
+	}
+
 	Radar *radar = RSL_wsr88d_to_radar(raw, (gchar*)site);
 	g_debug("AWeatherLevel2: rsl read done");
 	g_free(raw);
@@ -604,7 +631,7 @@ static gchar *_on_format_value(GtkScale *scale, gdouble value, gpointer _level2)
 	return g_strdup_printf("%.1lf dBZ ", value);
 }
 
-GtkWidget *aweather_level2_get_config(AWeatherLevel2 *level2)
+GtkWidget *aweather_level2_get_config(AWeatherLevel2 *level2, GritsPrefs *prefs)
 {
 	Radar *radar = level2->radar;
 	g_debug("AWeatherLevel2: get_config - %p, %p", level2, radar);
@@ -626,6 +653,10 @@ GtkWidget *aweather_level2_get_config(AWeatherLevel2 *level2)
 	/* Copy over out pointer to the date label so we can update the text dynamically later */
 	level2->date_label = date_label;
 
+	/* Determine if we should order the columns by elevation angle and duplicate instance of that elevation angle (false)
+	 * or by sweep start time (true).
+	 */
+	bool lIsShowAllSweepsEnabled = grits_prefs_get_boolean(prefs, "aweather/RSL_wsr88d_merge_split_cuts_off", NULL);
 
 	/* Sort global elevation instances by elevation, then instance */
 	gint compare_elevation_instance(const void *a, const void *b) {
@@ -661,10 +692,22 @@ GtkWidget *aweather_level2_get_config(AWeatherLevel2 *level2)
 			Sweep *sweep = vol->sweep[si];
 			if (sweep == NULL || sweep->h.elev == 0) continue;
 
-			/* Count sweeps at this elevation in the current volume */
-			guint instance = GPOINTER_TO_INT(g_hash_table_lookup(local_elev_count, &sweep->h.elev)) + 1;
-			g_debug("level2.c aweather_level2_get_config: Found sweep. Will put in row: %i, elevation: %f, instance: %i", rows, sweep->h.elev, instance);
-			g_hash_table_insert(local_elev_count, &sweep->h.elev, GUINT_TO_POINTER(instance));
+
+			time_t instance = 0;
+			if(lIsShowAllSweepsEnabled){
+				/* Use the sweep start time as the column for this sweep.
+				 * In other words, each column in the sweep selection grid is a specific time.
+				 */
+				RslDateTime objSweepStartTime;
+				RslDateTime objSweepFinishTime;
+				getSweepStartAndEndTime(sweep, &objSweepStartTime, &objSweepFinishTime);
+				instance = getTimeTFromRslDateTime(&objSweepStartTime);
+			} else {
+				/* Count sweeps at this elevation in the current volume */
+				instance = GPOINTER_TO_INT(g_hash_table_lookup(local_elev_count, &sweep->h.elev)) + 1;
+				g_debug("level2.c aweather_level2_get_config: Found sweep. Will put in row: %i, elevation: %f, instance: %li", rows, sweep->h.elev, instance);
+				g_hash_table_insert(local_elev_count, &sweep->h.elev, GUINT_TO_POINTER(instance));
+			}
 
 			/* Create the sweep selection button that we will later place in the UI table */
 			g_snprintf(button_str, 64, "%3.2f", sweep->h.elev);
@@ -714,7 +757,7 @@ GtkWidget *aweather_level2_get_config(AWeatherLevel2 *level2)
 			gtk_table_attach(GTK_TABLE(table), col_label, iCurrentColumn, iCurrentColumn + 1, 0, 1, GTK_FILL, GTK_FILL, 0, 0);
 		}
 
-		g_debug("level2.c aweather_level2_get_config: Adding button for elevation %f, instance: %i, row: %i, col: %i", ei->elevation, ei->instance, ei->iRowIndex, iCurrentColumn);
+		g_debug("level2.c aweather_level2_get_config: Adding button for elevation %f, instance: %li, row: %i, col: %i", ei->elevation, ei->instance, ei->iRowIndex, iCurrentColumn);
 
 		/* Add the sweep selection button to the UI table */
 		gtk_table_attach(

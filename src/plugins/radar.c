@@ -45,39 +45,86 @@ static void aweather_bin_set_child(GtkBin *bin, GtkWidget *new)
 }
 
 /* This function returns the raw pointer to the GList struct that is the closest to the requested time.
- * Whereas the function below returns the name of the file only. */
-static GList *_find_nearest_return_GList_pointer(time_t time, GList *files,
-		gsize offset)
+ * Whereas the function below returns the name of the file only.
+ * If sort_by_time is true, the files list is sorted by timestamp (descending) before finding the nearest file.
+ * Note that if sorting is enabled, a new list is returned via the return GList of this function.
+ * It is up to the caller to ensure this new list is deleted (g_list_free), but the contained strings do not need to be deleted as they point to strings in the provided list.
+ * Recommended deleting method: g_list_free(returned_list); g_list_foreach(files, (GFunc)g_free, NULL); g_list_free(files);
+ * If sorting is enabled, duplicate entries will be removed  in the returned list (duplicates can come from cached files that also exist on the server).
+ */
+static GList *_find_nearest_return_GList_pointer(time_t time, GList *files, gsize offset, gboolean sort_by_time)
 {
 	g_debug("RadarSite: find_nearest ...");
-	time_t  nearest_time = 0;
-	GList   *nearest_file = NULL;
 
-	struct tm tm = {};
+	/* Internal function - parses the file name into a time_t */
+	time_t _parse_file_time(const gchar *file, gsize offset) {
+		struct tm tm = {};
+		sscanf(file + offset, "%4d%2d%2d_%2d%2d",
+			&tm.tm_year, &tm.tm_mon, &tm.tm_mday,
+			&tm.tm_hour, &tm.tm_min);
+		tm.tm_year -= 1900;
+		tm.tm_mon -= 1;
+		return mktime(&tm);
+	}
+
+	/* Internal function - Compares times to allow us to sort the list of file names by timestamp. */
+	gint _compare_files_by_time(const void *a, const void *b) {
+		time_t time_a = _parse_file_time((const gchar *)a, offset);
+		time_t time_b = _parse_file_time((const gchar *)b, offset);
+		return (time_a - time_b) > 0;
+	}
+
+
+	/* If sorting is enabled, then pre-sort the array so the caller gets the list back in a consistent order */
+	if (sort_by_time) {
+		g_debug("RadarSite: Sorting files by timestamp");
+		files = g_list_sort(files, (GCompareFunc)_compare_files_by_time);
+	}
+
+	double nearest_time_delta = DBL_MAX;
+	GList *nearest_file = NULL;
+
+	/* Stores the list of unique file names - only used if sorting is enabled */
+	GList* objUniqueFileNames = NULL;
+	/* Used to detect if we hit a new element or if we found a duplicate */
+	gchar* cPreviousFileName = NULL;
+
 	g_debug("Before for loop");
 	for (GList *cur = files; cur; cur = cur->next) {
 		gchar *file = cur->data;
-	        g_debug("RadarSite: find_nearest - in loop. Current file: %s", file);
-		sscanf(file+offset, "%4d%2d%2d_%2d%2d",
-				&tm.tm_year, &tm.tm_mon, &tm.tm_mday,
-				&tm.tm_hour, &tm.tm_min);
-		tm.tm_year -= 1900;
-		tm.tm_mon  -= 1;
-		if (ABS(time - mktime(&tm)) <
-		    ABS(time - nearest_time)) {
-			nearest_file = cur;
-			nearest_time = mktime(&tm);
-		}
-	}
 
-	g_debug("RadarSite: find_nearest = %s", (gchar*) nearest_file->data);
+		if(g_strcmp0(file, cPreviousFileName) != 0){
+			if(sort_by_time){
+				/* We found a unique file - add it to the unique file list and get the pointer to the added element. */
+				objUniqueFileNames = g_list_prepend(objUniqueFileNames, file);
+			}
+
+			cPreviousFileName = file;
+
+			g_debug("RadarSite: find_nearest - in loop. Current file: %s", file);
+
+			time_t file_time = _parse_file_time(file, offset);
+			double file_time_delta = difftime(time, file_time);
+			file_time_delta = ABS(file_time_delta);
+			if(file_time_delta < nearest_time_delta){
+				nearest_file = (sort_by_time ? objUniqueFileNames : cur); /* if sorting, return the unique element list instead of teh non-unique one */
+				nearest_time_delta = file_time_delta;
+			}
+		} /* If we found a unique entry in the list */
+	} /* for each file in the list */
+
+	if(nearest_file != NULL){
+		g_debug("RadarSite: find_nearest = %s", (gchar *)nearest_file->data);
+	} else {
+		g_debug("RadarSite: find_nearest = NULL (no nearest file found).");
+	}
 	return nearest_file;
 }
 
 static gchar *_find_nearest(time_t time, GList *files,
 		gsize offset)
 {
-	GList* cFileNameListElement = _find_nearest_return_GList_pointer(time, files, offset);
+	GList* cFileNameListElement = _find_nearest_return_GList_pointer(time, files, offset, false);
 	if(cFileNameListElement == NULL){
 		return NULL;
 	} else {
@@ -316,6 +363,15 @@ void _animation_update_status_ui(gchar *file, goffset cur,
 {
 	RadarSite* site = _site;
 	RadarAnimation* objRadarAnimation = site->objRadarAnimation;
+
+	if(!objRadarAnimation->lIsAnimating){
+		/* If we are not animating right now, then do not run the logic in this function. The logic in here requires specific UI elements
+		 * to exist, which may not exist if the animation is not running.
+		 * This could be called after the animation stops if there were many scheduled UI thread callbacks waiting to run.
+		 */
+		g_debug("_animation_update_status_ui: This function was called when no animation was running. Exiting the function now.");
+		return;
+	}
 
 	/* Show toggle buttons to reflect the frames that are loaded.
 	 * Start at the length of the frame selection buttons array and add any that are missing (iterate to the current number of loaded frames).
@@ -614,10 +670,12 @@ gpointer _animation_update_thread(gpointer _site)
 	/* Star the animation in the forwards direction (when it finishes loading) */
 	objRadarAnimation->eAnimationNextFrameMode = NEXT_FRAME_FORWARD;
 
+	GList* objFilesListByTimeDesc = _find_nearest_return_GList_pointer(site->time, files, 5, true /* Sort the array so it is in a consistent order */);
+
 	/* We want the file name that is closest to the current set time and the previous N files.
 	 * Hence, we request the list element itself, then iterate forwards in the double-linked list to find the desired file names that are older than the starting file to build up our animation.
 	 */
-	for(GList *nearest = _find_nearest_return_GList_pointer(site->time, files, 5); objRadarAnimation->iAnimationFrames < objRadarAnimation->iAnimationFrameLimit && nearest != NULL; nearest = nearest->next){
+	for(GList *nearest = objFilesListByTimeDesc; objRadarAnimation->iAnimationFrames < objRadarAnimation->iAnimationFrameLimit && nearest != NULL; nearest = nearest->next){
 		g_debug("_animation_update_thread: About to fetch frame, prev: %p, curr: '%s', next: %p", nearest->prev, (char*) nearest->data, nearest->next);
 		/* Fetch new volume for the current file. */
 		gchar *local = g_strconcat(site->city->code, "/", nearest->data, NULL);
@@ -631,7 +689,7 @@ gpointer _animation_update_thread(gpointer _site)
 		if (file) {
 			/* Load and add new volume to our array of level2 frames. Increment the frames counter so we know how many frames we have. */
 			g_debug("_animation_update_thread - File is good. load - Site: %s, Frame number: %i", site->city->code, objRadarAnimation->iAnimationFrames);
-			AWeatherLevel2* objLevel2 = aweather_level2_new_from_file(file, site->city->code, colormaps);
+			AWeatherLevel2* objLevel2 = aweather_level2_new_from_file(file, site->city->code, colormaps, site->prefs);
 			g_debug("_animation_update_thread: parsing level2: %p", objLevel2);
 			objRadarAnimation->aAnimationLevel2Frames[objRadarAnimation->iAnimationFrames] = objLevel2;
 
@@ -658,6 +716,9 @@ gpointer _animation_update_thread(gpointer _site)
 
 	/* Cleanup */
 	g_free(nexrad_url);
+
+	/* Cleanup the sorted list - contained strings are pointers to 'files' strings and don't need to be deleted. */
+	g_list_free(objFilesListByTimeDesc);
 
 	/* Cleanup the list */
 	g_list_foreach(files, (GFunc)g_free, NULL);
@@ -830,7 +891,9 @@ void _start_animation_if_user_requested_it_to_start(RadarSite* site){
 	 * Note that if there is no level2 for this current site (radar failed to load / process), then we cannot start the animation, as the container hbox will not exist. */
 	if(site->objRadarAnimation->lUserWantsToAnimate
 		&& !site->objRadarAnimation->lIsAnimating
-		&& site->level2 != NULL){
+		&& site->level2 != NULL
+		/* If a sweep is not yet selected, then there is no sweep to select (a sweep is selected if possible on load). Thus, do not allow the animation to start as doing so could cause the animation loop to get stuck. */
+		&& site->level2->iSelectedSweepId != AWEATHER_LEVEL2_SELECTED_SWEEP_ID_NONE){
 		site->objRadarAnimation->lIsAnimating = true; /* Set to TRUE so the user cannot spawn a new background thread until the previous animation finished completely */
 
 		/* If the previous thread pointer still exists, then clean it up before we start a new thread. */
@@ -953,7 +1016,7 @@ gboolean _site_update_end(gpointer _site)
 		GtkWidget *scrolled_window = gtk_scrolled_window_new(NULL, NULL);
 		GtkWidget *vbox = gtk_vbox_new(FALSE, 5);
 		GtkWidget *animateUi = _getAnimateUi(site);
-		GtkWidget *sweepSelectionUiWidget = aweather_level2_get_config(site->level2);
+		GtkWidget *sweepSelectionUiWidget = aweather_level2_get_config(site->level2, site->prefs);
 
 
 		/* Automatically show the scrollbars */
@@ -1022,7 +1085,7 @@ gpointer _site_update_thread(gpointer _site)
 	/* Load and add new volume */
 	g_debug("RadarSite: update_thread - load - %s", site->city->code);
 	site->level2 = aweather_level2_new_from_file(
-			file, site->city->code, colormaps);
+			file, site->city->code, colormaps, site->prefs);
 	g_free(file);
 	if (!site->level2) {
 		site->message = "Load failed";

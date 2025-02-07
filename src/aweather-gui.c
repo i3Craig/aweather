@@ -386,6 +386,18 @@ G_MODULE_EXPORT int on_log_level_changed(GtkSpinButton *spinner, AWeatherGui *se
 	return TRUE;
 }
 
+G_MODULE_EXPORT int on_RSL_wsr88d_merge_split_cuts_off_changed(GtkToggleAction *action, AWeatherGui *self)
+{
+	gboolean value = gtk_toggle_action_get_active(action);
+	g_debug("AWeatherGui: on_RSL_wsr88d_merge_split_cuts_off_changed - %p, RSL_wsr88d_merge_split_cuts_off=%i", self, value);
+	grits_prefs_set_boolean(self->prefs, "aweather/RSL_wsr88d_merge_split_cuts_off", value);
+
+	/* Refresh the viewer, which will trigger the NEXRAD radar to reload with the changes applied */
+	grits_viewer_refresh(self->viewer);
+
+	return TRUE;
+}
+
 G_MODULE_EXPORT int on_animation_frames_changed(GtkSpinButton *spinner, AWeatherGui *self)
 {
 	gint value = gtk_spin_button_get_value_as_int(spinner);
@@ -466,19 +478,36 @@ static void menu_setup(AWeatherGui *self)
 	}
 }
 
+/* Validates and gets the pref value requested.
+ * If the pref is outside of the bounds provided, it is updated in grits_prefs automatically to the nearest bound.
+ */
+static int get_and_clamp_pref_integer(GritsPrefs* prefs, char* ipcPrefName, int ipiPrefMinValueAllowed, int ipiPrefMaxValueAllowed){
+	int iCurrentPrefValue = grits_prefs_get_integer(prefs, ipcPrefName, NULL);
+	int iClampedPrefValue = CLAMP(iCurrentPrefValue, ipiPrefMinValueAllowed, ipiPrefMaxValueAllowed);
+	if(iCurrentPrefValue != iClampedPrefValue){
+		/* The current pref value is outside of the allowed bounds. Update it in the prefs store */
+		grits_prefs_set_integer(prefs, ipcPrefName, iClampedPrefValue);
+	}
+
+	/* Return the clamped value */
+	return iClampedPrefValue;
+} /* get_and_clamp_pref_integer */
+
 static void prefs_setup(AWeatherGui *self)
 {
 	/* Set values */
 	gint   uf = grits_prefs_get_integer(self->prefs, "aweather/update_freq",  NULL);
 	gchar *nu = grits_prefs_get_string (self->prefs, "aweather/nexrad_url",   NULL);
 	gint   ll = grits_prefs_get_integer(self->prefs, "aweather/log_level",    NULL);
-	gint   af = grits_prefs_get_integer(self->prefs, "aweather/animation_frames", NULL);
+	gboolean ns = grits_prefs_get_boolean(self->prefs, "aweather/RSL_wsr88d_merge_split_cuts_off", NULL);
+	gint   af = get_and_clamp_pref_integer(self->prefs, "aweather/animation_frames", 1, 100);
 	gint   ai = grits_prefs_get_integer(self->prefs, "aweather/animation_frame_interval_ms", NULL);
 	gint   ae = grits_prefs_get_integer(self->prefs, "aweather/animation_end_frame_hold_ms", NULL);
 	gchar *is = grits_prefs_get_string (self->prefs, "aweather/initial_site", NULL);
 	GtkWidget *ufw = aweather_gui_get_widget(self, "prefs_general_freq");
 	GtkWidget *nuw = aweather_gui_get_widget(self, "prefs_general_url");
 	GtkWidget *llw = aweather_gui_get_widget(self, "prefs_general_log");
+	GObject *ans = aweather_gui_get_object(self, "RSL_wsr88d_merge_split_cuts_off");
 	GtkWidget *afw = aweather_gui_get_widget(self, "prefs_general_animation_frames");
 	GtkWidget *aiw = aweather_gui_get_widget(self, "prefs_general_animation_frame_interval_ms");
 	GtkWidget *aew = aweather_gui_get_widget(self, "prefs_general_animation_end_frame_hold_ms");
@@ -486,6 +515,7 @@ static void prefs_setup(AWeatherGui *self)
 	if (uf) gtk_spin_button_set_value(GTK_SPIN_BUTTON(ufw), uf);
 	if (nu) gtk_entry_set_text(GTK_ENTRY(nuw), nu), g_free(nu);
 	if (ll) gtk_spin_button_set_value(GTK_SPIN_BUTTON(llw), ll);
+	if (ns) gtk_toggle_action_set_active(GTK_TOGGLE_ACTION(ans), ns);
 	if (af) gtk_spin_button_set_value(GTK_SPIN_BUTTON(afw), af);
 	if (ai) gtk_spin_button_set_value(GTK_SPIN_BUTTON(aiw), ai);
 	if (ae) gtk_spin_button_set_value(GTK_SPIN_BUTTON(aew), ae);

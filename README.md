@@ -22,6 +22,7 @@ Installation
 Changes made from pileus.org version:
 - Added vector based dark map mode. State and county borders are drawn, but no requests are made to Open Street Maps. This mode is the default.
 - Added animation support for NEXRAD Level2 radar, including 3D isosurfaces.
+- Added an option to show all NEXRAD sweeps, including reflectivity data from velocity sweeps. Depending on the current mode the NEXRAD site is in, this can enable more than one sweep per minute, creating smoother animations.
 - Fixed many bugs that caused the application to crash.
 
 Original data sources for elevation and satellite imagery:
