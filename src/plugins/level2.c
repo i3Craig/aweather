@@ -141,6 +141,14 @@ bool aweatherLevel2AreTheseElevationsTheSame(float ipdElevationA, float ipdEleva
 	return dAngleDeltaAbsolute < dMaxAllowedElevationDeviation;
 }
 
+/* Internal function use in aweatherLevel2GetAllSweepsFromVolumeWithElevationSortedBySweepStartTime - Sort the sweeps by sweep start time */
+static gint fCompareSweeps(const void* a, const void* b){
+	const RslSweepDateTime *sweepInfoA = a;
+	const RslSweepDateTime *sweepInfoB = b;
+
+	return !isRslDateTimeABeforeB(&sweepInfoA->startDateTime, &sweepInfoB->finishDateTime);
+};
+
 /* Returns an array (GArray) of sweep indexes for the specified volume id ("type") sorted by sweep start time (oldest to newest). An empty array is returned of no sweeps are found matching the specified criteria.
  * The returned GArray must be released via g_array_free.
  */
@@ -162,15 +170,6 @@ GArray* aweatherLevel2GetAllSweepsFromVolumeWithElevationSortedBySweepStartTime(
 			g_array_append_val(opobjArray, sweepInfo);
 		} /* If angle is within allowed tolerance */
 	} /* For each sweep */
-
-	/* Sort the sweeps by sweep start time */
-	gint fCompareSweeps(const void* a, const void* b){
-		const RslSweepDateTime *sweepInfoA = a;
-		const RslSweepDateTime *sweepInfoB = b;
-
-		return !isRslDateTimeABeforeB(&sweepInfoA->startDateTime, &sweepInfoB->finishDateTime);
-	};
-
 
 	g_array_sort(opobjArray, fCompareSweeps);
 
@@ -447,9 +446,10 @@ static gboolean _set_sweep_cb(gpointer _level2)
 	g_object_unref(level2);
 
 	/* If the callback function pointer is set to a non-null value, then execute the callback function and clear out the pointer. */
-	if(level2->fAfterSetSweepCustomCallback != NULL){
-		level2->fAfterSetSweepCustomCallback();
-		level2->fAfterSetSweepCustomCallback = NULL;
+	if(level2->fAfterSetSweepOneTimeCustomCallback != NULL){
+		level2->fAfterSetSweepOneTimeCustomCallback(level2->objAfterSetSweepOneTimeCustomCallbackData);
+		level2->fAfterSetSweepOneTimeCustomCallback = NULL;
+		level2->objAfterSetSweepOneTimeCustomCallbackData = NULL;
 	}
 
 	return FALSE;
@@ -525,9 +525,10 @@ void aweather_level2_set_iso(AWeatherLevel2 *level2, gfloat level, bool iplAsync
 			grits_volume_set_level_sync(level2->volume, level);
 
 		/* If the callback function pointer is set to a non-null value, then execute the callback function and clear out the pointer. */
-		if(level2->fOnSetIsoCustomCallback != NULL){
-			level2->fOnSetIsoCustomCallback();
-			level2->fOnSetIsoCustomCallback = NULL;
+		if(level2->fOnSetIsoOneTimeCustomCallback != NULL){
+			level2->fOnSetIsoOneTimeCustomCallback(level2->objOnSetIsoOneTimeCustomCallbackData);
+			level2->fOnSetIsoOneTimeCustomCallback = NULL;
+			level2->objOnSetIsoOneTimeCustomCallbackData = NULL;
 		}
 
 		/* If this level2 object is currently hidden (for example, if we are animating and this frame is not needed),
@@ -545,8 +546,10 @@ AWeatherLevel2 *aweather_level2_new(Radar *radar, AWeatherColormap *colormap)
 	g_debug("AWeatherLevel2: new - %s", radar->h.radar_name);
 	RSL_sort_radar(radar);
 	AWeatherLevel2 *level2 = g_object_new(AWEATHER_TYPE_LEVEL2, NULL);
-	level2->fAfterSetSweepCustomCallback = NULL; /* Ensure the callback function pointer is not pointing to anything */
-	level2->fOnSetIsoCustomCallback = NULL; /* Ensure the callback function pointer is not pointing to anything */
+	level2->fAfterSetSweepOneTimeCustomCallback = NULL; /* Ensure the callback function pointer is not pointing to anything */
+	level2->objAfterSetSweepOneTimeCustomCallbackData = NULL;
+	level2->fOnSetIsoOneTimeCustomCallback = NULL; /* Ensure the callback function pointer is not pointing to anything */
+	level2->objOnSetIsoOneTimeCustomCallbackData = NULL;
 	level2->radar    = radar;
 	level2->colormap = colormap;
 
@@ -631,6 +634,17 @@ static gchar *_on_format_value(GtkScale *scale, gdouble value, gpointer _level2)
 	return g_strdup_printf("%.1lf dBZ ", value);
 }
 
+/* Internal function used in aweather_level2_get_config - Sort global elevation instances by elevation, then instance */
+static gint compare_elevation_instance(const void *a, const void *b) {
+	const SweepSelectionButtonInfo *ei_a = a;
+	const SweepSelectionButtonInfo *ei_b = b;
+
+	if (ei_a->elevation < ei_b->elevation) return -1;
+	if (ei_a->elevation > ei_b->elevation) return 1;
+	return (ei_a->instance < ei_b->instance) ? -1 : 1;
+}
+
+
 GtkWidget *aweather_level2_get_config(AWeatherLevel2 *level2, GritsPrefs *prefs)
 {
 	Radar *radar = level2->radar;
@@ -657,16 +671,6 @@ GtkWidget *aweather_level2_get_config(AWeatherLevel2 *level2, GritsPrefs *prefs)
 	 * or by sweep start time (true).
 	 */
 	bool lIsShowAllSweepsEnabled = grits_prefs_get_boolean(prefs, "aweather/RSL_wsr88d_merge_split_cuts_off", NULL);
-
-	/* Sort global elevation instances by elevation, then instance */
-	gint compare_elevation_instance(const void *a, const void *b) {
-		const SweepSelectionButtonInfo *ei_a = a;
-		const SweepSelectionButtonInfo *ei_b = b;
-
-		if (ei_a->elevation < ei_b->elevation) return -1;
-		if (ei_a->elevation > ei_b->elevation) return 1;
-		return (ei_a->instance < ei_b->instance) ? -1 : 1;
-	}
 
 	/* Step 1: Collect unique global (elevation, instance) pairs */
 	GList *global_elev_list = NULL;

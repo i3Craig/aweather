@@ -44,6 +44,27 @@ static void aweather_bin_set_child(GtkBin *bin, GtkWidget *new)
 	gtk_widget_show_all(new);
 }
 
+
+/* Internal function used by _find_nearest_return_GList_pointer - parses the file name into a time_t */
+static time_t _parse_file_time(const gchar *file, gsize offset) {
+	struct tm tm = {};
+	sscanf(file + offset, "%4d%2d%2d_%2d%2d",
+		&tm.tm_year, &tm.tm_mon, &tm.tm_mday,
+		&tm.tm_hour, &tm.tm_min);
+	tm.tm_year -= 1900;
+	tm.tm_mon -= 1;
+	return mktime(&tm);
+}
+
+/* Internal function used by _find_nearest_return_GList_pointer - Compares times to allow us to sort the list of file names by timestamp. */
+static gint _compare_files_by_time(const void *a, const void *b, gpointer offsetPointer) {
+	gsize offset = * (gsize *) offsetPointer;
+	time_t time_a = _parse_file_time((const gchar *)a, offset);
+	time_t time_b = _parse_file_time((const gchar *)b, offset);
+	return (time_a - time_b) > 0;
+}
+
+
 /* This function returns the raw pointer to the GList struct that is the closest to the requested time.
  * Whereas the function below returns the name of the file only.
  * If sort_by_time is true, the files list is sorted by timestamp (descending) before finding the nearest file.
@@ -56,29 +77,10 @@ static GList *_find_nearest_return_GList_pointer(time_t time, GList *files, gsiz
 {
 	g_debug("RadarSite: find_nearest ...");
 
-	/* Internal function - parses the file name into a time_t */
-	time_t _parse_file_time(const gchar *file, gsize offset) {
-		struct tm tm = {};
-		sscanf(file + offset, "%4d%2d%2d_%2d%2d",
-			&tm.tm_year, &tm.tm_mon, &tm.tm_mday,
-			&tm.tm_hour, &tm.tm_min);
-		tm.tm_year -= 1900;
-		tm.tm_mon -= 1;
-		return mktime(&tm);
-	}
-
-	/* Internal function - Compares times to allow us to sort the list of file names by timestamp. */
-	gint _compare_files_by_time(const void *a, const void *b) {
-		time_t time_a = _parse_file_time((const gchar *)a, offset);
-		time_t time_b = _parse_file_time((const gchar *)b, offset);
-		return (time_a - time_b) > 0;
-	}
-
-
 	/* If sorting is enabled, then pre-sort the array so the caller gets the list back in a consistent order */
 	if (sort_by_time) {
 		g_debug("RadarSite: Sorting files by timestamp");
-		files = g_list_sort(files, (GCompareFunc)_compare_files_by_time);
+		files = g_list_sort_with_data(files, _compare_files_by_time, &offset);
 	}
 
 	double nearest_time_delta = DBL_MAX;
@@ -157,6 +159,7 @@ typedef struct {
 	bool		lIsAnimating;		/* Stores TRUE if we are actively animating or FALSE if we are not animating. */
 	bool		lIsAnimationCleanupInProgress; /* Stores TRUE if the animation cleanup process needs to run or is running. Stores FALSE if the cleanup is done or not needed (cleaning up buttons in the UI) */
 	int		iAnimationCurrentFrame;	/* Stores the current frame number that we are at in the animation process */
+	int		iPreviousLevel2FrameThatWasVisible; /* Stores the previous frame that was displayed to the user so we know what we need to hide to swap to the next frame */
 	bool		lAnimationLoading;	/* Stures TRUE if the animation is loading or FALSE if it is not loading */
 	GtkWidget*	objAnimateButton;	/* Stores a reference to the animate button widget */
 	int		iAnimationFrames;	/* Stores the number of animation frames */
@@ -224,18 +227,23 @@ void _poke_animation_thread(RadarSite* site){
 	g_mutex_unlock(&site->objRadarAnimation->objBtnPressedGMutex);
 }
 
+/* Internal function used in _animation_thread_usleep_or_wakeup_from_poke to translate the gpointer to a RadarSite*. */
+static void fOnUiChangedCallback(gpointer _site){
+	RadarSite* site = _site;
+	/* User clicked a different sweep elevation or volume button or changed the isosurface slider. Tell the animation thread about this */
+	_poke_animation_thread(site);
+}
+
 /* Call from the animation thread to sleep for the specified amount of time (microseconds).
  * If the _poke_animation_thread function is called above during the sleep, this function will return early and will return true.
  * If the timeout expires normally (not poked), then false is returned.
  */
 bool _animation_thread_usleep_or_wakeup_from_poke(RadarSite* site, gint64 ipiMicrosecondsToSleep){
 	/* Setup a callback so if the user clicks a button in the UI to change the sweep elevation or volume or changes the isosurface slider, we will automatically wake up the animation thread to apply the change. */
-	void fOnUiChangedCallback(){
-		/* User clicked a different sweep elevation or volume button or changed the isosurface slider. Tell the animation thread about this */
-		_poke_animation_thread(site);
-	}
-	site->level2->fAfterSetSweepCustomCallback = fOnUiChangedCallback;
-	site->level2->fOnSetIsoCustomCallback = fOnUiChangedCallback;
+	site->level2->objAfterSetSweepOneTimeCustomCallbackData = (gpointer) site;
+	site->level2->fAfterSetSweepOneTimeCustomCallback = fOnUiChangedCallback;
+	site->level2->objOnSetIsoOneTimeCustomCallbackData = (gpointer) site;;
+	site->level2->fOnSetIsoOneTimeCustomCallback = fOnUiChangedCallback;
 
 	g_mutex_lock(&site->objRadarAnimation->objBtnPressedGMutex);
 
@@ -246,8 +254,10 @@ bool _animation_thread_usleep_or_wakeup_from_poke(RadarSite* site, gint64 ipiMic
 	g_mutex_unlock(&site->objRadarAnimation->objBtnPressedGMutex);
 
 	/* Clear out the callback function so we don't try to run it when it is not needed. */
-	site->level2->fAfterSetSweepCustomCallback = NULL;
-	site->level2->fOnSetIsoCustomCallback = NULL;
+	site->level2->objAfterSetSweepOneTimeCustomCallbackData = NULL;
+	site->level2->fAfterSetSweepOneTimeCustomCallback = NULL;
+	site->level2->objOnSetIsoOneTimeCustomCallbackData = NULL;
+	site->level2->fOnSetIsoOneTimeCustomCallback = NULL;
 
 	return lReturnValue;
 }
@@ -603,6 +613,20 @@ bool _animation_goto_next_frame(RadarSite* site, NextFrameMode ipeNextFrameMode)
 	return lDidWeHitTheEndOfTheAnimationLoop;
 }
 
+/* Internal function used in _animation_update_thread to switch to the next frame. This could be run from the UI thread or animation thread. */
+static void switchToNextFrame(gpointer _ipobjRadarAnimation){
+	RadarAnimation* objRadarAnimation = (RadarAnimation*) _ipobjRadarAnimation;
+
+	/* Hide the current frame */
+	grits_object_hide(GRITS_OBJECT(objRadarAnimation->aAnimationLevel2Frames[objRadarAnimation->iPreviousLevel2FrameThatWasVisible]), true);
+
+	/* After changing the frame number, show the current frame */
+	grits_object_hide(GRITS_OBJECT(objRadarAnimation->aAnimationLevel2Frames[objRadarAnimation->iAnimationCurrentFrame]), false);
+
+	/* Update the previous frame counter so we know which one to hide next */
+	objRadarAnimation->iPreviousLevel2FrameThatWasVisible = objRadarAnimation->iAnimationCurrentFrame;
+}
+
 gpointer _animation_update_thread(gpointer _site)
 {
 	RadarSite* site = _site;
@@ -733,8 +757,8 @@ gpointer _animation_update_thread(gpointer _site)
 	objRadarAnimation->iAnimationCurrentFrame = 0;
 	objRadarAnimation->iAnimationSubframeNbr = 0;
 
-	/* Stores the Level2 file the user was previously looking at, allowing us to hide it to show the next frame */
-	int iPreviousLevel2FrameThatWasVisible = 0;
+	/* Reset the prev frame store, as this stores the Level2 file the user was previously looking at, allowing us to hide it to show the next frame */
+	objRadarAnimation->iPreviousLevel2FrameThatWasVisible = 0;
 
 	/* Stores the times that the current loop of the animation starts and finishes at before we commit these values to the GUI */
 	time_t iPreliminaryAnimationStartTime = -1;
@@ -787,26 +811,16 @@ gpointer _animation_update_thread(gpointer _site)
 		RslSweepDateTime objCurrentSweep = g_array_index(objRadarAnimation->aAnimationCurrentFileSortedSubframes, RslSweepDateTime, objRadarAnimation->iAnimationSubframeNbr);
 		AWeatherLevel2* objCurrentLevel2 = objRadarAnimation->aAnimationLevel2Frames[objRadarAnimation->iAnimationCurrentFrame];
 
-		void switchToNextFrame(){
-			/* Hide the current frame */
-			grits_object_hide(GRITS_OBJECT(objRadarAnimation->aAnimationLevel2Frames[iPreviousLevel2FrameThatWasVisible]), true);
-
-			/* After changing the frame number, show the current frame */
-			grits_object_hide(GRITS_OBJECT(objRadarAnimation->aAnimationLevel2Frames[objRadarAnimation->iAnimationCurrentFrame]), false);
-
-			/* Update the previous frame counter so we know which one to hide next */
-			iPreviousLevel2FrameThatWasVisible = objRadarAnimation->iAnimationCurrentFrame;
-		}
-
 		/* If the sweep or volume needs to be changed before displaying this frame, then change it */
 		if(objCurrentLevel2->iSelectedVolumeId != objCurrentSweep.iVolumeId
 			|| objCurrentLevel2->iSelectedSweepId != objCurrentSweep.iSweepId){
 			/* The sweep is changed asynchronously. Thus, we must run the hide / show of the next frame logic after that sweep swap is done by using the callback */
-			objCurrentLevel2->fAfterSetSweepCustomCallback = switchToNextFrame;
+			objCurrentLevel2->objAfterSetSweepOneTimeCustomCallbackData = (gpointer) objRadarAnimation;
+			objCurrentLevel2->fAfterSetSweepOneTimeCustomCallback = switchToNextFrame;
 			aweather_level2_set_sweep(objCurrentLevel2, objCurrentSweep.iVolumeId, objCurrentSweep.iSweepId);
 		} else {
 			/* No sweep change is needed. Just swap the frames directly */
-			switchToNextFrame();
+			switchToNextFrame((gpointer) objRadarAnimation);
 		}
 
 		/* If we need to set the iso on this volume (not in sync with the current site), then set it. This allows us to animate the 3D radar.
@@ -858,7 +872,7 @@ gpointer _animation_update_thread(gpointer _site)
 	 * We must check each level2 frame.
 	 */
 	for(int iCurrentLevel2 = 0; iCurrentLevel2 < objRadarAnimation->iAnimationFrames; ++iCurrentLevel2){
-		while(atomic_load(&objRadarAnimation->aAnimationLevel2Frames[iCurrentLevel2]->fAfterSetSweepCustomCallback) != NULL){
+		while(atomic_load(&objRadarAnimation->aAnimationLevel2Frames[iCurrentLevel2]->fAfterSetSweepOneTimeCustomCallback) != NULL){
 			g_usleep(1000); /* Wait 1ms */
 		}
 	}

@@ -54,8 +54,11 @@ struct _AWeatherLevel2 {
 	int		iSelectedSweepId;	/* Stores the sweep id ("elevatioin id") that the user has selected to view in this volume file */
 	float		dSelectedElevation;	/* Stores the elevation angle that the user has selected to view in this volume */
 	
-	void (*fAfterSetSweepCustomCallback)();	/* Stores a pointer to a custom function which if set to a non-null value will be executed exactly once on the main ui thread after the sweep has been loaded into memory (set sweep operation is complete). */
-	void (*fOnSetIsoCustomCallback)(); /* Stores a pointer to a custom function which if set to a non-null value will be executed when the user changes the isosurface slider in the GUI, after volume->level is updated, but not necessarily after the isosurface is updated in the UI */
+	void (*fAfterSetSweepOneTimeCustomCallback)(gpointer);	/* Stores a pointer to a custom function which if set to a non-null value will be executed exactly once on the main ui thread after the sweep has been loaded into memory (set sweep operation is complete). */
+	gpointer objAfterSetSweepOneTimeCustomCallbackData; /* Stores data passed to this one-time callback */
+
+	void (*fOnSetIsoOneTimeCustomCallback)(gpointer); /* Stores a pointer to a custom function which if set to a non-null value will be executed when the user changes the isosurface slider in the GUI, after volume->level is updated, but not necessarily after the isosurface is updated in the UI */
+	gpointer objOnSetIsoOneTimeCustomCallbackData; /* Stores data passed to this one-time callback */
 };
 
 struct _AWeatherLevel2Class {
@@ -125,4 +128,5 @@ bool aweatherLevel2AreTheseElevationsTheSame(float ipdElevationA, float ipdEleva
  * The returned GArray must be released via g_array_free.
  */
 GArray* aweatherLevel2GetAllSweepsFromVolumeWithElevationSortedBySweepStartTime(AWeatherLevel2* level2, int ipiVolumeId, float ipdElevation);
+
 #endif
