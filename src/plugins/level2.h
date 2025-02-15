@@ -36,6 +36,15 @@
 typedef struct _AWeatherLevel2      AWeatherLevel2;
 typedef struct _AWeatherLevel2Class AWeatherLevel2Class;
 
+/* Stores sweep texture related properties so we can cache them if we believe they may be needed later.
+ * For example, if we are in an animation and the frame may be needed again, there is no need to recompute the sweep texture
+ * and re-upload it to the GPU.
+ */
+typedef struct {
+	guint             sweep_tex;
+	gdouble           sweep_coords[2];
+} SweepTexture;
+
 struct _AWeatherLevel2 {
 	GritsObject       parent;
 	Radar            *radar;
@@ -45,8 +54,12 @@ struct _AWeatherLevel2 {
 	GritsVolume      *volume;
 	Sweep            *sweep;
 	AWeatherColormap *sweep_colors;
-	gdouble           sweep_coords[2];
-	guint             sweep_tex;
+	SweepTexture     *objSweepTexture;
+
+	/* Texture cache properties */
+	bool            lEnableSweepTextureCache;
+	SweepTexture     **aSweepTexturesCache;
+	gint             iSweepTexturesCacheLength;
 
 	GtkWidget	*date_label; /* Pointer to the date label in the GUI so we can update the text dynamically */
 
@@ -54,6 +67,11 @@ struct _AWeatherLevel2 {
 	int		iSelectedSweepId;	/* Stores the sweep id ("elevatioin id") that the user has selected to view in this volume file */
 	float		dSelectedElevation;	/* Stores the elevation angle that the user has selected to view in this volume */
 	
+	Sweep            *objSelectedRslSweep; /* Stores the Sweep pointer the user just selected. This is copied to 'sweep' once all processing to change the sweep is complete. */
+	Volume           *objSelectedRslVolume; /* Stores the volume the user selected that the selected sweep is contained in. */
+	int              iPreviouslyDisplayedVolumeId; /* Stores the ID of the volume that we previously displayed to the user. */
+	int              iPreviouslyDisplayedSweepId; /* Stores the ID (index in volume) of the sweep that was previously displayed to the user */
+
 	void (*fAfterSetSweepOneTimeCustomCallback)(gpointer);	/* Stores a pointer to a custom function which if set to a non-null value will be executed exactly once on the main ui thread after the sweep has been loaded into memory (set sweep operation is complete). */
 	gpointer objAfterSetSweepOneTimeCustomCallbackData; /* Stores data passed to this one-time callback */
 
@@ -128,5 +146,8 @@ bool aweatherLevel2AreTheseElevationsTheSame(float ipdElevationA, float ipdEleva
  * The returned GArray must be released via g_array_free.
  */
 GArray* aweatherLevel2GetAllSweepsFromVolumeWithElevationSortedBySweepStartTime(AWeatherLevel2* level2, int ipiVolumeId, float ipdElevation);
+
+/* Call to update the GUI sweep timestamp label to reflect the time that the currently selected sweep was captured */
+void aweatherLevel2UpdateSweepTimestampGui(AWeatherLevel2* level2);
 
 #endif

@@ -466,6 +466,9 @@ void _animation_update_status_ui(gchar *file, goffset cur,
 		gtk_progress_bar_set_text(GTK_PROGRESS_BAR(objRadarAnimation->objAnimateProgressBar), "Stopped");
 		gtk_progress_bar_set_fraction(GTK_PROGRESS_BAR(objRadarAnimation->objAnimateProgressBar), 0);
 		
+		/* Update the timestamp shown in the UI to reflect the selected static sweep */
+		aweatherLevel2UpdateSweepTimestampGui(site->level2);
+
 		/* If we need to run cleanup, then cleanup the UI and set the animation done flag */
 
 		/* Cleanup the event listeners */
@@ -720,6 +723,9 @@ gpointer _animation_update_thread(gpointer _site)
 			if (!objLevel2) {
 				g_debug("_animation_update_thread. We failed to load a level2 file. Skipping it. File: %s", file);
 			} else {
+				/* Enable caching of the sweep textures in each level2 file. This reduces the amount of data we have to send to the GPU on each frame change if each file contains more than one frame */
+				objLevel2->lEnableSweepTextureCache = true;
+
 				grits_object_hide(GRITS_OBJECT(objLevel2), true);
 				g_debug("_animation_update_thread: After hide of frame.");
 				grits_viewer_add(site->viewer, GRITS_OBJECT(objLevel2), GRITS_LEVEL_WORLD+3, TRUE);

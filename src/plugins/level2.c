@@ -222,20 +222,22 @@ static void _bscan_sweep(Sweep *sweep, AWeatherColormap *colormap,
 }
 
 /* Load a sweep into an OpenGL texture */
-static void _load_sweep_gl(AWeatherLevel2 *level2)
+static SweepTexture* _load_sweep_gl(Sweep* ipobjRslSweep, AWeatherColormap* ipobjColormap)
 {
 	g_debug("AWeatherLevel2: _load_sweep_gl");
+
+	SweepTexture* objSweepTexture = g_malloc0(sizeof(SweepTexture));
+
 	guint8 *data;
 	gint width, height;
-	_bscan_sweep(level2->sweep, level2->sweep_colors, &data, &width, &height);
+	_bscan_sweep(ipobjRslSweep, ipobjColormap, &data, &width, &height);
 	gint tex_width  = pow(2, ceil(log(width )/log(2)));
 	gint tex_height = pow(2, ceil(log(height)/log(2)));
-	level2->sweep_coords[0] = (double)width  / tex_width;
-	level2->sweep_coords[1] = (double)height / tex_height;
+	objSweepTexture->sweep_coords[0] = (double)width  / tex_width;
+	objSweepTexture->sweep_coords[1] = (double)height / tex_height;
 
-	if (!level2->sweep_tex)
-		 glGenTextures(1, &level2->sweep_tex);
-	glBindTexture(GL_TEXTURE_2D, level2->sweep_tex);
+	glGenTextures(1, &objSweepTexture->sweep_tex);
+	glBindTexture(GL_TEXTURE_2D, objSweepTexture->sweep_tex);
 	glPixelStorei(GL_PACK_ALIGNMENT, 1);
 	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, tex_width, tex_height, 0,
@@ -246,9 +248,11 @@ static void _load_sweep_gl(AWeatherLevel2 *level2)
 	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
 	g_free(data);
+
+	return objSweepTexture;
 }
 
-static void _updateSweepTimestampGui(AWeatherLevel2* level2){
+void aweatherLevel2UpdateSweepTimestampGui(AWeatherLevel2* level2){
 	/* Update the GUI to show the user when the sweep started and ended */
 	RslDateTime sweepStartTime, sweepFinishTime;
 	if(level2->date_label != NULL){
@@ -366,7 +370,7 @@ static VolGrid *_load_grid(Volume *vol)
 void aweather_level2_draw(GritsObject *_level2, GritsOpenGL *opengl)
 {
 	AWeatherLevel2 *level2 = AWEATHER_LEVEL2(_level2);
-	if (!level2->sweep || !level2->sweep_tex)
+	if (!level2->sweep || !level2->objSweepTexture)
 		return;
 
 	/* Draw wsr88d */
@@ -380,9 +384,9 @@ void aweather_level2_draw(GritsObject *_level2, GritsOpenGL *opengl)
 	glColor4f(1,1,1,1);
 
 	/* Draw the rays */
-	gdouble xscale = level2->sweep_coords[0];
-	gdouble yscale = level2->sweep_coords[1];
-	glBindTexture(GL_TEXTURE_2D, level2->sweep_tex);
+	gdouble xscale = level2->objSweepTexture->sweep_coords[0];
+	gdouble yscale = level2->objSweepTexture->sweep_coords[1];
+	glBindTexture(GL_TEXTURE_2D, level2->objSweepTexture->sweep_tex);
 	glBegin(GL_TRIANGLE_STRIP);
 	for (int ri = 0; ri <= sweep->h.nrays; ri++) {
 		Ray  *ray = NULL;
@@ -436,12 +440,101 @@ void aweather_level2_hide(GritsObject *_level2, gboolean hidden)
 /***********
  * Methods *
  ***********/
+
+static void _free_sweep_texture(SweepTexture* ipobjSweepTexture){
+	if(ipobjSweepTexture != NULL){
+		/* Unload the texture from GPU memory */
+		glDeleteTextures(1, &ipobjSweepTexture->sweep_tex);
+		g_free(ipobjSweepTexture);
+	}
+}
+
+static void _free_sweep_texture_cache(AWeatherLevel2* level2){
+	for(int i = 0; i < level2->iSweepTexturesCacheLength; ++i){
+		_free_sweep_texture(level2->aSweepTexturesCache[i]);
+		/* If we just deleted the current sweep pointer, then set that pointer to NULL so it isn't used */
+		if(level2->objSweepTexture == level2->aSweepTexturesCache[i]){
+			level2->objSweepTexture = NULL;
+		}
+	}
+	g_free(level2->aSweepTexturesCache);
+	level2->iSweepTexturesCacheLength = 0;
+	level2->aSweepTexturesCache = NULL;
+}
+
 static gboolean _set_sweep_cb(gpointer _level2)
 {
 	g_debug("AWeatherLevel2: _set_sweep_cb");
 	AWeatherLevel2 *level2 = _level2;
-	_load_sweep_gl(level2);
-	_updateSweepTimestampGui(level2);
+
+	int type = level2->iSelectedVolumeId;
+	int iSweepId = level2->iSelectedSweepId;
+	Sweep* objSelectedSweep = level2->objSelectedRslSweep;
+	Volume* objSelectedVolume = level2->objSelectedRslVolume;
+
+	/* Stores the sweep texture we will use for the new sweep */
+	SweepTexture* objSweepTexture = NULL;
+
+	if(objSelectedSweep == NULL){
+		/* A bad sweep was somehow selected. Get out of this function */
+		return FALSE;
+	}
+
+	/* Find colormap if the colormap needs to change (a new RSL volume was selected or this is the first sweep selected). */
+	if(level2->sweep_colors == NULL
+		|| level2->sweep_colors->type != type){
+		level2->sweep_colors = NULL;
+		for (int i = 0; level2->colormap[i].file; i++)
+			if (level2->colormap[i].type == type)
+				level2->sweep_colors = &level2->colormap[i];
+		if (!level2->sweep_colors) {
+			g_warning("AWeatherLevel2: set_sweep - missing colormap[%d]", type);
+			level2->sweep_colors = &level2->colormap[0];
+		}
+	}
+
+	if(level2->lEnableSweepTextureCache){
+		/* If sweep caching is enabled */
+		if(level2->iPreviouslyDisplayedVolumeId != type){
+			/* If the we are changing to a new volume, then update the prev variable and invalidate the cache as we only cache sweeps in one volume. */
+			level2->iPreviouslyDisplayedVolumeId = type;
+			_free_sweep_texture_cache(level2);
+		} else {
+			/* If we are in the same volume and caching is enabled,
+			 * then let's save off what we computed for the previous sweep so that if we switch back to it, we can do so more quickly.
+			 */
+			if(level2->aSweepTexturesCache == NULL){
+				/* Allocate a cache array to contain a cache slot for each sweep in this volume
+				 * Caching is used in the animation process, which only iterates through sweeps in the same volume.
+				 * Hence, it is only worthwile to cache sweeps in the same volume.
+				 */
+				level2->iSweepTexturesCacheLength = objSelectedVolume->h.nsweeps;
+				level2->aSweepTexturesCache = g_malloc0(level2->iSweepTexturesCacheLength * sizeof(SweepTexture*));
+			}
+
+			/* Add the previous sweep texture details to the cache before we swap to the new sweep */
+			level2->aSweepTexturesCache[level2->iPreviouslyDisplayedSweepId] = level2->objSweepTexture;
+
+			/* If the sweep we are switching to is cached, then use the cache. Otherwise, compute the sweep texture and send it to the GPU */
+			objSweepTexture = level2->aSweepTexturesCache[iSweepId];
+		}
+	} else {
+		/* If sweep caching is not enabled, then free the existing texture if it needs to be. */
+		_free_sweep_texture(level2->objSweepTexture);
+	}
+
+
+	if(objSweepTexture == NULL){
+		/* If there was no cached sweep texture, then compute the texture and upload it to the GPU. */
+		objSweepTexture = _load_sweep_gl(objSelectedSweep, level2->sweep_colors);
+	}
+
+	/* Switch over to the new seep. This must happn on the UI thread to prevent race conditions */
+	level2->sweep = objSelectedSweep;
+	level2->iPreviouslyDisplayedSweepId = iSweepId;
+	level2->objSweepTexture = objSweepTexture;
+
+	aweatherLevel2UpdateSweepTimestampGui(level2);
 	grits_object_queue_draw(_level2);
 	g_object_unref(level2);
 
@@ -466,18 +559,9 @@ void aweather_level2_set_sweep(AWeatherLevel2 *level2,
 		g_error("Error: Invalid sweep index passed in: %i. Number of sweeps: %i", ipiSweepIndex, volume->h.nsweeps);
 		return;
 	}
-	level2->sweep = volume->sweep[ipiSweepIndex];
-	if (!level2->sweep) return;
-
-	/* Find colormap */
-	level2->sweep_colors = NULL;
-	for (int i = 0; level2->colormap[i].file; i++)
-		if (level2->colormap[i].type == type)
-			level2->sweep_colors = &level2->colormap[i];
-	if (!level2->sweep_colors) {
-		g_warning("AWeatherLevel2: set_sweep - missing colormap[%d]", type);
-		level2->sweep_colors = &level2->colormap[0];
-	}
+	level2->objSelectedRslSweep = volume->sweep[ipiSweepIndex];
+	level2->objSelectedRslVolume = volume;
+	if (!level2->objSelectedRslSweep) return;
 
 	/* Load data on the UI thread as the OpenGL calls may not work in the background thread.
 	 * We use G_PRIORITY_HIGH_IDLE so that the sweep change can happen even if the user is interacting with the app (for example, moving the map).
@@ -488,7 +572,7 @@ void aweather_level2_set_sweep(AWeatherLevel2 *level2,
 	/* Store the selected volume and sweep id */
 	level2->iSelectedVolumeId = type;
 	level2->iSelectedSweepId = ipiSweepIndex;
-	level2->dSelectedElevation = level2->sweep->h.elev;
+	level2->dSelectedElevation = level2->objSelectedRslSweep->h.elev;
 }
 
 void aweather_level2_set_iso(AWeatherLevel2 *level2, gfloat level, bool iplAsync)
@@ -552,6 +636,14 @@ AWeatherLevel2 *aweather_level2_new(Radar *radar, AWeatherColormap *colormap)
 	level2->objOnSetIsoOneTimeCustomCallbackData = NULL;
 	level2->radar    = radar;
 	level2->colormap = colormap;
+
+	level2->aSweepTexturesCache = NULL;
+	level2->iSweepTexturesCacheLength = 0;
+	level2->objSweepTexture = NULL;
+	level2->lEnableSweepTextureCache = false;
+	level2->iSelectedVolumeId = 0;
+	level2->iSelectedSweepId = 0;
+	level2->dSelectedElevation = 0;
 
 	/* Default to no sweep / volume selected yet */
 	level2->iSelectedSweepId = AWEATHER_LEVEL2_SELECTED_SWEEP_ID_NONE;
@@ -817,8 +909,10 @@ static void aweather_level2_finalize(GObject *_level2)
 	AWeatherLevel2 *level2 = AWEATHER_LEVEL2(_level2);
 	g_debug("AWeatherLevel2: finalize - %p", _level2);
 	RSL_free_radar(level2->radar);
-	if (level2->sweep_tex)
-		glDeleteTextures(1, &level2->sweep_tex);
+	/* Delete any sweep textures that need to be deleted from the cache and the current sweep texture */
+	_free_sweep_texture_cache(level2);
+	_free_sweep_texture((level2->objSweepTexture));
+
 	G_OBJECT_CLASS(aweather_level2_parent_class)->finalize(_level2);
 }
 static void aweather_level2_class_init(AWeatherLevel2Class *klass)
