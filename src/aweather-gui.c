@@ -209,6 +209,28 @@ G_MODULE_EXPORT void on_refresh(GtkAction *action, AWeatherGui *self)
 	grits_viewer_refresh(self->viewer);
 }
 
+/* Call to adjust the current application time by the number of minutes passed in */
+static void adjustGritsTimeByMinutes(AWeatherGui *self, gint ipiMinutesDelta){
+	time_t gritsTime = grits_viewer_get_time(self->viewer);
+	gritsTime += ipiMinutesDelta * 60;
+	grits_viewer_set_time(self->viewer, gritsTime);
+	grits_viewer_refresh(self->viewer);
+}
+
+G_MODULE_EXPORT void on_jump_back_five_min(GtkAction *action, AWeatherGui *self){
+	adjustGritsTimeByMinutes(self, -5);
+}
+
+G_MODULE_EXPORT void on_jump_to_current_time(GtkAction *action, AWeatherGui *self){
+	grits_viewer_set_time(self->viewer, time(NULL)); /* Set viewer time to current time */
+	grits_viewer_refresh(self->viewer);
+}
+
+G_MODULE_EXPORT void on_jump_forward_five_min(GtkAction *action, AWeatherGui *self){
+	adjustGritsTimeByMinutes(self, 5);
+}
+
+
 static gboolean on_update_timeout(AWeatherGui *self)
 {
 	g_debug("AWeatherGui: on_update_timeout");

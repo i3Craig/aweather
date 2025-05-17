@@ -41,6 +41,28 @@
     <property name="stock_id">gtk-preferences</property>
     <signal name="activate" handler="gtk_window_present" object="prefs_window" swapped="yes"/>
   </object>
+
+  <!-- Actions to modify the current time -->
+  <object class="GtkAction" id="jumpBackFiveMin">
+    <property name="label" translatable="yes">_Jump Back 5 Minutes</property>
+    <property name="stock_id">gtk-go-back</property>
+    <property name="tooltip" translatable="yes">Jump back 5 minutes</property>
+    <signal name="activate" handler="on_jump_back_five_min" swapped="no"/>
+  </object>
+  <object class="GtkAction" id="jumpToCurrentTime">
+    <property name="label" translatable="yes">_Jump to Current Time</property>
+    <property name="stock_id">gtk-home</property>
+    <property name="tooltip" translatable="yes">Jump to current time</property>
+    <signal name="activate" handler="on_jump_to_current_time" swapped="no"/>
+  </object>
+  <object class="GtkAction" id="jumpForwardFiveMin">
+    <property name="label" translatable="yes">_Jump Forwards 5 Minutes</property>
+    <property name="stock_id">gtk-go-forward</property>
+    <property name="tooltip" translatable="yes">Jump forward 5 minutes</property>
+    <signal name="activate" handler="on_jump_forward_five_min" swapped="no"/>
+  </object>
+
+
   <object class="GtkAction" id="quit">
     <property name="label">_Quit</property>
     <property name="stock_id">gtk-quit</property>
@@ -701,6 +723,60 @@ The hypothetical commands `show w' and `show c' should show the appropriate part
                 <property name="homogeneous">True</property>
               </packing>
             </child>
+
+            <!-- Spacer to move the buttons following this off to the right side of the window (over the time controls) -->
+            <child>
+              <object class="GtkToolItem" id="toolbar_spacer">
+                <property name="visible">True</property>
+              </object>
+              <packing>
+                <property name="expand">True</property>
+                <property name="homogeneous">False</property>
+              </packing>
+            </child>
+
+            <!-- Time control buttons - jump back 5 minutes, go to current time, jump forward 5 minutes. -->
+            <child>
+              <object class="GtkToolButton" id="clock_jump_back_5_min">
+                <property name="related_action">jumpBackFiveMin</property>
+                <property name="visible">True</property>
+                <property name="can_focus">False</property>
+                <property name="label" translatable="yes">toolbutton1</property>
+                <property name="use_underline">True</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="homogeneous">True</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkToolButton" id="clock_goto_now">
+                <property name="related_action">jumpToCurrentTime</property>
+                <property name="visible">True</property>
+                <property name="can_focus">False</property>
+                <property name="label" translatable="yes">toolbutton1</property>
+                <property name="use_underline">True</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="homogeneous">True</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkToolButton" id="clock_jump_forward_5_min">
+                <property name="related_action">jumpForwardFiveMin</property>
+                <property name="visible">True</property>
+                <property name="can_focus">False</property>
+                <property name="label" translatable="yes">toolbutton1</property>
+                <property name="use_underline">True</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="homogeneous">True</property>
+              </packing>
+            </child>
+
+
           </object>
           <packing>
             <property name="expand">False</property>
