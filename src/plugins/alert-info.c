@@ -31,6 +31,7 @@ AlertInfo alert_info[] = {
 	{"Dust Storm Warning"             , "warning",  "Dust Storm", 32  , 0, 0, 0, {255, 228, 196}},  // bisque
 	{"Earthquake Warning"             , "warning",  "Earthquake", 22  , 0, 0, 0, {139, 69 , 19 }},  // saddlebrown
 	{"Excessive Heat Warning"         , "warning",  "Heat",       31  , 0, 0, 0, {199, 21 , 133}},  // mediumvioletred
+	{"Extreme Heat Warning"           , "warning",  "Heat",       31  , 0, 0, 0, {199, 21 , 133}},  // mediumvioletred
 	{"Extreme Cold Warning"           , "warning",  "Cold",       44  , 0, 0, 0, {0  , 0  , 255}},  // blue
 	{"Extreme Wind Warning"           , "warning",  "Ext Wind",   3   , 0, 0, 1, {255, 20 , 147}},  // deeppink
 	{"Fire Warning"                   , "warning",  "Fire",       7   , 0, 0, 0, {160, 82 , 45 }},  // sienna
@@ -117,6 +118,7 @@ AlertInfo alert_info[] = {
 	{"Blizzard Watch"                 , "watch",    "Blizzard",   80  , 0, 0, 0, {173, 255, 47 }},  // greenyellow
 	{"Coastal Flood Watch"            , "watch",    "C Flood",    84  , 0, 0, 0, {102, 205, 170}},  // mediumaquamarine
 	{"Excessive Heat Watch"           , "watch",    "Heat",       87  , 0, 0, 0, {128, 0  , 0  }},  // maroon
+	{"Extreme Heat Watch"             , "watch",    "Heat",       87  , 0, 0, 0, {128, 0  , 0  }},  // maroon
 	{"Extreme Cold Watch"             , "watch",    "Ext Cold",   88  , 0, 0, 0, {0  , 0  , 255}},  // blue
 	{"Fire Weather Watch"             , "watch",    "Fire Wx",    93  , 0, 0, 0, {255, 222, 173}},  // navajowhite
 	{"Flash Flood Watch"              , "watch",    "F Flood",    37  , 0, 0, 0, {50 , 205, 50 }},  // limegreen
@@ -147,6 +149,7 @@ AlertInfo alert_info[] = {
 	{"Lakeshore Flood Statement"      , "other",    "L Flood",    98  , 0, 0, 0, {107, 142, 35 }},  // olivedrab
 	{"Marine Weather Statement"       , "other",    "Marine Wx",  11  , 0, 0, 1, {255, 239, 213}},  // peachpuff
 	{"Rip Current Statement"          , "other",    "Rip Curnt",  1000, 0, 0, 0, {64 , 224, 208}},  // turquoise
+	{"Beach Hazards Statement"        , "other",    "Beach Haz",  50,   0, 0, 0, {135, 206, 235}},  // skyblue
 	{"Severe Weather Statement"       , "other",    "Severe Wx",  38  , 0, 0, 1, {0  , 255, 255}},  // aqua
 	{"Special Weather Statement"      , "other",    "Special Wx", 99  , 0, 0, 0, {255, 228, 181}},  // moccasin
 	{"Typhoon Statement"              , "other",    "Typhoon",    49  , 0, 0, 0, {147, 112, 219}},  // mediumpurple
