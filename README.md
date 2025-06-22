@@ -30,7 +30,7 @@ Ground    (WMS) - http://www.nasa.network.com/wms
 Elevation (WMS) - http://www.nasa.network.com/elev
 
 Troubleshooting:
-If the build fails, try reconfiguring automake tooling by running `autoreconf -ivf` in the root directory of this repo. Then, try cleaning (`make clean`) and building again (`make`).
+- If the build fails, try reconfiguring automake tooling by running `autoreconf -ivf` in the root directory of this repo. Then, try cleaning (`make clean`) and building again (`make`).
 
 See also:
 WDSS II  - http://www.wdssii.org/
