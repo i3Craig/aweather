@@ -16,8 +16,11 @@ Most of the APIs used by the original program (version 0.8.1) had changed or no 
 - elev: Previously adjusted the elevation of points on the map to reflect elevation changes in the world. API no longer exists. No drop-in replacement found.
 - sat: Displays static satellite imagery on the map instead of the OSM imagery from the map plugin. API no longer exists. No drop-in replacement found.
 
-#### Installation
+#### Installation:
 - Arch Linux: Available in the AUR (https://aur.archlinux.org/packages/aweather-git)
+
+#### System Requirements:
+OpenGL 2.1+ or OpenGL ES 2.1+ Note: Systems with OpenGL 3.1 or newer will perform better.
 
 #### Changes made from pileus.org version:
 - Added vector based dark map mode. State and county borders are drawn, but no requests are made to Open Street Maps. This mode is the default.
