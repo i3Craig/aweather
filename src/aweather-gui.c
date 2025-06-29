@@ -420,6 +420,16 @@ G_MODULE_EXPORT int on_RSL_wsr88d_merge_split_cuts_off_changed(GtkToggleAction *
 	return TRUE;
 }
 
+G_MODULE_EXPORT int on_download_radar_files_for_non_visible_sites_changed(GtkToggleAction *action, AWeatherGui *self)
+{
+	gboolean value = gtk_toggle_action_get_active(action);
+	g_debug("AWeatherGui: on_download_radar_files_for_non_visible_sites_changed - %p, download_radar_files_for_non_visible_sites=%i", self, value);
+	grits_prefs_set_boolean(self->prefs, "aweather/download_radar_files_for_non_visible_sites", value);
+
+	return TRUE;
+}
+
+
 G_MODULE_EXPORT int on_animation_frames_changed(GtkSpinButton *spinner, AWeatherGui *self)
 {
 	gint value = gtk_spin_button_get_value_as_int(spinner);
@@ -522,6 +532,7 @@ static void prefs_setup(AWeatherGui *self)
 	gchar *nu = grits_prefs_get_string (self->prefs, "aweather/nexrad_url",   NULL);
 	gint   ll = grits_prefs_get_integer(self->prefs, "aweather/log_level",    NULL);
 	gboolean ns = grits_prefs_get_boolean(self->prefs, "aweather/RSL_wsr88d_merge_split_cuts_off", NULL);
+	gboolean nv = grits_prefs_get_boolean(self->prefs, "aweather/download_radar_files_for_non_visible_sites", NULL);
 	gint   af = get_and_clamp_pref_integer(self->prefs, "aweather/animation_frames", 1, 100);
 	gint   ai = grits_prefs_get_integer(self->prefs, "aweather/animation_frame_interval_ms", NULL);
 	gint   ae = grits_prefs_get_integer(self->prefs, "aweather/animation_end_frame_hold_ms", NULL);
@@ -530,6 +541,7 @@ static void prefs_setup(AWeatherGui *self)
 	GtkWidget *nuw = aweather_gui_get_widget(self, "prefs_general_url");
 	GtkWidget *llw = aweather_gui_get_widget(self, "prefs_general_log");
 	GObject *ans = aweather_gui_get_object(self, "RSL_wsr88d_merge_split_cuts_off");
+	GObject *anv = aweather_gui_get_object(self, "download_radar_files_for_non_visible_sites");
 	GtkWidget *afw = aweather_gui_get_widget(self, "prefs_general_animation_frames");
 	GtkWidget *aiw = aweather_gui_get_widget(self, "prefs_general_animation_frame_interval_ms");
 	GtkWidget *aew = aweather_gui_get_widget(self, "prefs_general_animation_end_frame_hold_ms");
@@ -538,6 +550,7 @@ static void prefs_setup(AWeatherGui *self)
 	if (nu) gtk_entry_set_text(GTK_ENTRY(nuw), nu), g_free(nu);
 	if (ll) gtk_spin_button_set_value(GTK_SPIN_BUTTON(llw), ll);
 	if (ns) gtk_toggle_action_set_active(GTK_TOGGLE_ACTION(ans), ns);
+	if (nv) gtk_toggle_action_set_active(GTK_TOGGLE_ACTION(anv), nv);
 	if (af) gtk_spin_button_set_value(GTK_SPIN_BUTTON(afw), af);
 	if (ai) gtk_spin_button_set_value(GTK_SPIN_BUTTON(aiw), ai);
 	if (ae) gtk_spin_button_set_value(GTK_SPIN_BUTTON(aew), ae);

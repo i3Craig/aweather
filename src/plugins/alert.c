@@ -21,6 +21,7 @@
 #include <stdio.h>
 #include <string.h>
 
+
 #include "alert.h"
 #include "alert-info.h"
 
@@ -491,6 +492,7 @@ static GtkWidget *_make_msg_details(AlertMsg *msg)
 			GTK_SHADOW_IN);
 	gtk_text_buffer_set_text(alert_buf, alert_str, -1);
 	gtk_text_view_set_buffer(GTK_TEXT_VIEW(alert_view), alert_buf);
+	gtk_text_view_set_editable(GTK_TEXT_VIEW(alert_view), FALSE);
 	gtk_widget_modify_font(GTK_WIDGET(alert_view), alert_font);
 	gtk_container_add(GTK_CONTAINER(alert), alert_view);
 	g_free(alert_str);
@@ -903,7 +905,7 @@ static GtkWidget *_make_details(GritsViewer *viewer)
 
 	gtk_window_set_transient_for(GTK_WINDOW(dialog), GTK_WINDOW(win));
 	gtk_window_set_title(GTK_WINDOW(dialog), "Alert Details - AWeather");
-	gtk_window_set_default_size(GTK_WINDOW(dialog), 625, 500);
+	gtk_window_set_default_size(GTK_WINDOW(dialog), 625, 550);
 	gtk_notebook_set_scrollable(GTK_NOTEBOOK(notebook), TRUE);
 	gtk_container_add(GTK_CONTAINER(content), notebook);
 	gtk_box_pack_end(GTK_BOX(action), link, 0, 0, 0);

@@ -36,6 +36,10 @@
     <property name="label">_NEXRAD Show All Sweeps</property>
     <signal name="toggled" handler="on_RSL_wsr88d_merge_split_cuts_off_changed" swapped="no"/>
   </object>
+  <object class="GtkToggleAction" id="download_radar_files_for_non_visible_sites">
+    <property name="label">_Download radar files for non-visible sites</property>
+    <signal name="toggled" handler="on_download_radar_files_for_non_visible_sites_changed" swapped="no"/>
+  </object>
   <object class="GtkAction" id="prefs">
     <property name="label" translatable="yes">_Preferences</property>
     <property name="stock_id">gtk-preferences</property>
@@ -1170,7 +1174,7 @@ The hypothetical commands `show w' and `show c' should show the appropriate part
 
 
 
-			    <!-- Show SAILS sweeps toggle button -->
+                            <!-- Show SAILS sweeps toggle button -->
                             <child>
                               <object class="GtkCheckButton" id="prefs_general_RSL_wsr88d_merge_split_cuts_off">
                                 <property name="related_action">RSL_wsr88d_merge_split_cuts_off</property>
@@ -1191,7 +1195,7 @@ The hypothetical commands `show w' and `show c' should show the appropriate part
 
 
 
-			    <!-- Number of frames in the animation setting -->
+                            <!-- Number of frames in the animation setting -->
                             <child>
                               <object class="GtkHBox" id="prefs_general_animation_frames_0">
                                 <property name="visible">True</property>
@@ -1238,7 +1242,7 @@ The hypothetical commands `show w' and `show c' should show the appropriate part
                             </child>
 
 
-			    <!-- Delay between frames in animation setting -->
+                            <!-- Delay between frames in animation setting -->
                             <child>
                               <object class="GtkHBox" id="prefs_general_animation_frame_interval_ms_0">
                                 <property name="visible">True</property>
@@ -1285,7 +1289,7 @@ The hypothetical commands `show w' and `show c' should show the appropriate part
                             </child>
 
 
-			    <!-- Delay at end of animation loop setting -->
+                            <!-- Delay at end of animation loop setting -->
                             <child>
                               <object class="GtkHBox" id="prefs_general_animation_end_frame_hold_ms_0">
                                 <property name="visible">True</property>
@@ -1332,6 +1336,25 @@ The hypothetical commands `show w' and `show c' should show the appropriate part
                             </child>
 
 
+
+                            <!-- Preload NEXRAD level 2 files even if they are not visible flag. -->
+                            <child>
+                              <object class="GtkCheckButton" id="prefs_general_download_radar_files_for_non_visible_sites">
+                                <property name="related_action">download_radar_files_for_non_visible_sites</property>
+                                <property name="visible">True</property>
+                                <property name="can_focus">True</property>
+                                <property name="receives_default">False</property>
+                                <property name="draw_indicator">True</property>
+                                <property name="tooltip_text" translatable="yes">If enabled, NEXRAD level 2 files will be downloaded for non-visible radar sites. Enable this to make switching between radar sites in the local area faster. Disable this to reduce network usage.</property>
+                              </object>
+                              <packing>
+                                <property name="expand">True</property>
+                                <property name="fill">True</property>
+                                <property name="position">8</property>
+                              </packing>
+                            </child>
+
+
                             <child>
                               <object class="GtkHBox" id="prefs_general_log_0">
                                 <property name="visible">True</property>
@@ -1373,7 +1396,7 @@ The hypothetical commands `show w' and `show c' should show the appropriate part
                               <packing>
                                 <property name="expand">True</property>
                                 <property name="fill">True</property>
-                                <property name="position">8</property>
+                                <property name="position">9</property>
                               </packing>
                             </child>
                           </object>

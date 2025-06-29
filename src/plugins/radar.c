@@ -140,6 +140,7 @@ static gchar *_find_nearest(time_t time, GList *files,
  **************/
 typedef enum {
 	STATUS_UNLOADED,
+	STATUS_PENDING_LOAD, /* Used when the data for this radar site has not yet been loaded, but will be when the user clicks the tab in the notebook */
 	STATUS_LOADING,
 	STATUS_LOADED,
 } RadarSiteStatus;
@@ -203,6 +204,7 @@ struct _RadarSite {
 	RadarSiteStatus status;      // Loading status for the site
 	GtkWidget      *config;
 	AWeatherLevel2 *level2;      // The Level2 structure for the current volume
+	gboolean        lNeedsRefreshWhenShown; // Stores true if a reload was requested for this site while it was not visible and we need to reload it when/if the site becomes visible again.
 
 	/* Internal data */
 	time_t          time;        // Current timestamp of the level2
@@ -1123,6 +1125,20 @@ out:
 
 void _site_update(RadarSite *site)
 {
+	/* If we are hidden and the user has configured this application to not reload radar sites that are hidden, then don't reload anything, but instead, set the 'needs to reload when shown' flag. */
+	if(site->hidden
+		&& !grits_prefs_get_boolean(site->prefs, "aweather/download_radar_files_for_non_visible_sites", NULL)){
+		site->lNeedsRefreshWhenShown = true;
+
+		/* If we haven't loaded anything for this site yet, but it isn't visible (so we cannot load anything for it right now),
+		 * then flag the site as 'pending load' so we know that an initial load is still needed, but don't keep adding the site to the notebook.
+		 */
+		if(site->status == STATUS_UNLOADED)
+			site->status = STATUS_PENDING_LOAD;
+
+		return;
+	}
+
 	if (site->status == STATUS_LOADING)
 		return;
 	site->status = STATUS_LOADING;
@@ -1153,9 +1169,9 @@ void _site_update(RadarSite *site)
 /* RadarSite methods */
 void radar_site_unload(RadarSite *site)
 {
-	if (site->status != STATUS_LOADED)
-		return; // Abort if it's still loading
-
+	if (site->status == STATUS_LOADING
+		|| site->status == STATUS_UNLOADED)
+		return; // Abort if it's still loading (to prevent errors) or has not been initialized yet (no need to cleanup if nothing was allocated).
 	/* If we are animating right now, then don't delete the level2 object and don't cleanup here.
 	 * If we try to cleanup during an animation, it will cause the program to crash.
 	 * Instead, request the animation to stop. When this code runs again (the next time the user tries to move the map), we will allow the radar site to be cleaned up.
@@ -1186,6 +1202,11 @@ void radar_site_unload(RadarSite *site)
 	g_free(site->objRadarAnimation);
 
 	site->status = STATUS_UNLOADED;
+
+	/* Since the site has been unloaded, set the hidden flag to true so that if the site is loaded again later (user moves into view),
+	 * we don't automatically display the radar for this site (if another radar site is visible).
+	 */
+	site->hidden = true;
 }
 
 void radar_site_load(RadarSite *site)
@@ -1200,6 +1221,9 @@ void radar_site_load(RadarSite *site)
 	site->objRadarAnimation->objAnimationThread = NULL;
 	site->objRadarAnimation->lUserWantsToAnimate = false;
 	site->objRadarAnimation->aAnimationCurrentFileSortedSubframes = NULL;
+
+	/* If this site was pending a reload previously, clear the flag. It was never viewed again after the reload was requested, so we can clear this flag out, as we are now  */
+	site->lNeedsRefreshWhenShown = false;
 
 	/* Add tab page */
 	site->config = gtk_alignment_new(0, 0, 1, 1);
@@ -1271,6 +1295,9 @@ RadarSite *radar_site_new(city_t *city, GtkWidget *pconfig,
 	site->city    = city;
 	site->pconfig = pconfig;
 	site->hidden  = TRUE;
+
+	/* Ensure the refresh variable is initialized to a known state. */
+	site->lNeedsRefreshWhenShown = false;
 
 	/* Set initial location */
 	gdouble lat, lon, elev;
@@ -1751,13 +1778,21 @@ static void _update_hidden(GtkNotebook *notebook,
 			grits_object_hide(GRITS_OBJECT(conus->tile[0]), is_hidden);
 			grits_object_hide(GRITS_OBJECT(conus->tile[1]), is_hidden);
 		} else if (site) {
+			site->hidden = is_hidden;
+
 			/* If we are hiding the site while it is animating, then stop the animation and wait for it to finish, otherwise, start the animation back up if it was previously running.  */
 			if(is_hidden)
 				_stop_animation_and_wait_for_animation_to_stop_save_user_choice(site);
-			else
-				_start_animation_if_user_requested_it_to_start(site);
+			else {
+				/* If the user has diabled refreshing when the radar site is not visible and refreshed the time when this site was not visible and now the site is visible, go ahead and run the refresh */
+				if(site->lNeedsRefreshWhenShown){
+					_site_update(site);
+					site->lNeedsRefreshWhenShown = false;
+				}
 
-			site->hidden = is_hidden;
+				_start_animation_if_user_requested_it_to_start(site);
+			}
+
 			if (site->level2)
 				grits_object_hide(GRITS_OBJECT(site->level2), is_hidden);
 		} else {
