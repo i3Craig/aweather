@@ -27,7 +27,7 @@
 
 #include "../compat.h"
 
-#define MSG_INDEX "http://alerts.weather.gov/cap/us.php?x=0"
+#define MSG_INDEX "https://api.weather.gov/alerts/active.atom?region_type=land"
 #define CONFIG_HEIGHT 3
 
 /* Format for single cap alert:

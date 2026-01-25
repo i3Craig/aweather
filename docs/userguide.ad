@@ -82,7 +82,7 @@ The default radar feed is publically accessible thanks to NOMADS
 and is located at: https://nomads.ncep.noaa.gov/pub/data/nccf/radar/nexrad_level2/.
 
 AWeather also displays some severe weather alerts provided by the NOAA weather
-alerts http://alerts.weather.gov/[feed].
+alerts https://api.weather.gov/alerts/active.atom[feed].
 
 When run under Linux, AWeather can interface with the
 http://www.catb.org/gpsd/[GPSd] location services to track and display the
