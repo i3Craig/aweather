@@ -51,6 +51,9 @@ struct _GritsPluginAlert {
 	time_t       updated;
 	GTree       *counties;
 	GList       *states;
+
+	/* Stores true if no alert messages were loaded or false if there are some alert messages in the msgs list */
+	gboolean lHasNoAlertMessages;
 };
 
 struct _GritsPluginAlertClass {

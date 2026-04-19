@@ -710,14 +710,6 @@ static gboolean _update_buttons(GritsPluginAlert *alert)
 	GtkWidget *alerts  = g_object_get_data(G_OBJECT(alert->config), "alerts");
 	GtkWidget *updated = g_object_get_data(G_OBJECT(alert->config), "updated");
 
-	/* Determine which buttons to show */
-	for (int i = 0; alert_info[i].title; i++)
-		alert_info[i].current = FALSE;
-	for (GList *cur = alert->msgs; cur; cur = cur->next) {
-		AlertMsg *msg = cur->data;
-		msg->info->current = TRUE;
-	}
-
 	/* Delete old buttons */
 	GList *frames = gtk_container_get_children(GTK_CONTAINER(alerts));
 	for (GList *frame = frames; frame; frame = frame->next) {
@@ -749,9 +741,11 @@ static gboolean _update_buttons(GritsPluginAlert *alert)
 
 	/* Set time widget */
 	struct tm *tm = gmtime(&alert->updated);
-	gchar *date_str = g_strdup_printf(" <b><i>%04d-%02d-%02d %02d:%02d</i></b>",
+	gchar *cHasNoAlertMsgs = (alert->lHasNoAlertMessages ? " (No alerts found)" : "");
+	gchar *date_str = g_strdup_printf(" <b><i>%04d-%02d-%02d %02d:%02d%s</i></b>",
 			tm->tm_year+1900, tm->tm_mon+1, tm->tm_mday,
-			tm->tm_hour,      tm->tm_min);
+			tm->tm_hour,      tm->tm_min,
+			cHasNoAlertMsgs);
 	gtk_label_set_markup(GTK_LABEL(updated), date_str);
 	g_free(date_str);
 
@@ -812,11 +806,22 @@ static void _update(gpointer _, gpointer _alert)
 
 	time_t   when    = grits_viewer_get_time(alert->viewer);
 	gboolean offline = grits_viewer_get_offline(alert->viewer);
-	if (!(alert->msgs = msg_load_index(alert->http, when, &alert->updated, offline)))
-		return;
+	/* Load the new alerts. If we fail to load the alerts, alert->msgs will be NULL. We must continue on so that we don't leak the old alerts (stored in old), however. */
+	alert->msgs = msg_load_index(alert->http, when, &alert->updated, offline);
 
-	if (!alert->update_source)
+	if (!alert->update_source){
+		/* Determine which buttons to show.
+		 * Note that this must happen on the background thread (here), not on the UI thread (_update_buttons function) since the background thread can update alert->msgs.
+		 */
+		for (int i = 0; alert_info[i].title; i++)
+			alert_info[i].current = FALSE;
+		for (GList *cur = alert->msgs; cur; cur = cur->next) {
+			AlertMsg *msg = cur->data;
+			msg->info->current = TRUE;
+		}
+		alert->lHasNoAlertMessages = (alert->msgs == NULL); /* Calculate here so we don't have to access alert->msgs in the UI thread */
 		alert->update_source = g_idle_add((GSourceFunc)_update_buttons, alert);
+	}
 	_update_warnings(alert, old);
 
 	g_list_foreach(old, (GFunc)msg_free, NULL);

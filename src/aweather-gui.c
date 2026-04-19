@@ -354,6 +354,11 @@ static void update_time_widget(GritsViewer *viewer, time_t time, AWeatherGui *se
 		gtk_tree_path_free(path);
 	}
 	g_free(cTimeString);
+
+	/* Update the calendar date (since changing the "date time" could also change the date). */
+	GtkWidget *cal = aweather_gui_get_widget(self, "main_date_cal");
+	gtk_calendar_select_month(GTK_CALENDAR(cal), tm->tm_mon, tm->tm_year + 1900);
+	gtk_calendar_select_day(GTK_CALENDAR(cal), tm->tm_mday);
 }
 
 G_MODULE_EXPORT gboolean on_configure(AWeatherGui *self, GdkEventConfigure *config)
