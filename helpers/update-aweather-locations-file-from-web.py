@@ -272,7 +272,7 @@ def main():
     download_file(file_a_url, file_a_path)
 
     # Download the list of sites that actually have NEXRAD files on the server we pull radar files from.
-    download_file('https://nomads.ncep.noaa.gov/pub/data/nccf/radar/nexrad_level2/grlevel2.cfg', file_sites_with_files)
+    download_file('https://tgftp.nws.noaa.gov/data/radar/nexrad_level2/grlevel2.cfg', file_sites_with_files)
 
     file_a_data = parse_file_a(file_a_path)
     file_b_data = parse_file_b(file_b_path)

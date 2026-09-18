@@ -79,7 +79,7 @@ AWeather requires an active internet connection along with a data source in
 order to retrieve, decode and display current or recent radar data.
 
 The default radar feed is publically accessible thanks to NOMADS
-and is located at: https://nomads.ncep.noaa.gov/pub/data/nccf/radar/nexrad_level2/.
+and is located at: https://tgftp.nws.noaa.gov/data/radar/nexrad_level2/.
 
 AWeather also displays some severe weather alerts provided by the NOAA weather
 alerts https://api.weather.gov/alerts/active.atom[feed].
